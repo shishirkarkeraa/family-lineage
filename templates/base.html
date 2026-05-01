@@ -15,16 +15,22 @@
 
         function nameForLanguage(item) {
             const language = getLanguage();
+            const nameEn = item.name_en || item.nameEn;
+            const nameKn = item.name_kn || item.nameKn;
+
             return language === 'en'
-                ? (item.name_en || item.name_kn || '')
-                : (item.name_kn || item.name_en || '');
+                ? (nameEn || nameKn || '')
+                : (nameKn || nameEn || '');
         }
 
         function relationshipForLanguage(item) {
             const language = getLanguage();
+            const relationshipEn = item.relationship_en || item.relationshipEn;
+            const relationshipKn = item.relationship_kn || item.relationshipKn;
+
             return language === 'en'
-                ? (item.relationship_en || item.relationship_kn || '')
-                : (item.relationship_kn || item.relationship_en || '');
+                ? (relationshipEn || relationshipKn || '')
+                : (relationshipKn || relationshipEn || '');
         }
 
         function applyLanguage() {

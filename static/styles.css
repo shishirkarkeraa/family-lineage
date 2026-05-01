@@ -130,6 +130,11 @@ select:focus {
   border-color: var(--accent-color);
 }
 
+select option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
 button {
   background: var(--accent-color);
   color: white;
