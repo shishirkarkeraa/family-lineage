@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block head %}
+<script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<style>
+    #mynetwork {
+        width: 100%;
+        height: 700px;
+        border: 1px solid var(--border-color);
+        background: rgba(15, 23, 42, 0.4);
+        border-radius: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Complete Family Tree</h2>
+    <div id="mynetwork"></div>
+</div>
+
+<script type="text/javascript">
+    const nodesData = {{ nodes | tojson | safe }};
+    const edgesData = {{ edges | tojson | safe }};
+    
+    function buildVisNodes() {
+        return nodesData.map(node => ({
+            id: node.id,
+            label: nameForLanguage(node),
+            shape: 'box',
+            color: {
+                background: node.gender === 'Female' ? '#db2777' : (node.gender === 'Male' ? '#2563eb' : '#475569'),
+                border: '#ffffff',
+                highlight: {
+                    background: '#ffffff',
+                    border: '#000000'
+                }
+            },
+            font: {
+                color: '#ffffff',
+                face: 'Inter',
+                size: 16
+            },
+            margin: 10
+        }));
+    }
+
+    const visNodes = new vis.DataSet(buildVisNodes());
+
+    const visEdges = new vis.DataSet(
+        edgesData.map(edge => ({
+            from: edge.from,
+            to: edge.to,
+            arrows: 'to',
+            color: { color: 'rgba(255,255,255,0.3)' }
+        }))
+    );
+
+    const container = document.getElementById('mynetwork');
+    const data = {
+        nodes: visNodes,
+        edges: visEdges
+    };
+    const options = {
+        layout: {
+            hierarchical: {
+                direction: 'UD',
+                sortMethod: 'directed',
+                levelSeparation: 150,
+                nodeSpacing: 150
+            }
+        },
+        physics: false
+    };
+    
+    const network = new vis.Network(container, data, options);
+
+    window.addEventListener('languagechange', () => {
+        visNodes.update(buildVisNodes());
+        network.fit();
+    });
+</script>
+{% endblock %}

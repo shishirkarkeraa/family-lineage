@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <h2>Find Relationship</h2>
+    <p class="mb-4 text-secondary">Select two people to find their common ancestor.</p>
+    
+    <div class="flex gap-4 items-center mb-4">
+        <select id="p1-select">
+            <option value="">-- Person 1 --</option>
+            {% for p in persons %}
+                <option value="{{ p.id }}" data-name-en="{{ p.name_en }}" data-name-kn="{{ p.name_kn }}">{{ p.name_kn }}</option>
+            {% endfor %}
+        </select>
+        
+        <span style="color: var(--text-secondary)">and</span>
+        
+        <select id="p2-select">
+            <option value="">-- Person 2 --</option>
+            {% for p in persons %}
+                <option value="{{ p.id }}" data-name-en="{{ p.name_en }}" data-name-kn="{{ p.name_kn }}">{{ p.name_kn }}</option>
+            {% endfor %}
+        </select>
+        
+        <button onclick="findRelationship()">Find</button>
+    </div>
+    
+    <div id="result" class="mt-8"></div>
+</div>
+
+<script>
+    let currentRelationship = null;
+
+    async function findRelationship() {
+        const p1 = document.getElementById('p1-select').value;
+        const p2 = document.getElementById('p2-select').value;
+        
+        if (!p1 || !p2) return;
+        
+        const res = await fetch(`/api/relationship?p1_id=${p1}&p2_id=${p2}`);
+        const data = await res.json();
+        currentRelationship = data;
+        renderRelationship();
+    }
+
+    function renderRelationship() {
+        if (!currentRelationship) return;
+
+        const data = currentRelationship;
+        const container = document.getElementById('result');
+        container.innerHTML = `<h3>${relationshipForLanguage(data)}</h3>`;
+        
+        if (data.path && data.path.length > 0) {
+            const pathDiv = document.createElement('div');
+            pathDiv.className = 'mt-4';
+            
+            data.path.forEach((node, index) => {
+                const nodeSpan = document.createElement('span');
+                nodeSpan.className = 'path-node';
+                nodeSpan.textContent = nameForLanguage(node);
+                
+                if (node.id === data.lca.id) {
+                    nodeSpan.style.borderColor = '#db2777';
+                    nodeSpan.style.background = 'rgba(219, 39, 119, 0.1)';
+                }
+                
+                pathDiv.appendChild(nodeSpan);
+                
+                if (index < data.path.length - 1) {
+                    const arrow = document.createElement('span');
+                    arrow.className = 'arrow';
+                    arrow.innerHTML = '&harr;';
+                    pathDiv.appendChild(arrow);
+                }
+            });
+            
+            container.appendChild(pathDiv);
+        }
+    }
+
+    window.addEventListener('languagechange', renderRelationship);
+</script>
+{% endblock %}

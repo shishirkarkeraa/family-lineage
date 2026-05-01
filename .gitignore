@@ -1,0 +1,9 @@
+FamTree2.drawio.xml
+.env
+venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

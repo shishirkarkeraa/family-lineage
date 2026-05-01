@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Tree App</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        const LANGUAGE_KEY = 'family-tree-language';
+
+        function getLanguage() {
+            return localStorage.getItem(LANGUAGE_KEY) || 'kn';
+        }
+
+        function nameForLanguage(item) {
+            const language = getLanguage();
+            return language === 'en'
+                ? (item.name_en || item.name_kn || '')
+                : (item.name_kn || item.name_en || '');
+        }
+
+        function relationshipForLanguage(item) {
+            const language = getLanguage();
+            return language === 'en'
+                ? (item.relationship_en || item.relationship_kn || '')
+                : (item.relationship_kn || item.relationship_en || '');
+        }
+
+        function applyLanguage() {
+            const language = getLanguage();
+            document.documentElement.lang = language === 'en' ? 'en' : 'kn';
+
+            document.querySelectorAll('[data-name-en], [data-name-kn]').forEach((element) => {
+                element.textContent = nameForLanguage(element.dataset);
+            });
+
+            const toggle = document.getElementById('language-toggle');
+            if (toggle) {
+                toggle.textContent = language === 'en' ? 'ಕನ್ನಡ' : 'English';
+                toggle.setAttribute('aria-label', language === 'en' ? 'Switch to Kannada' : 'Switch to English');
+            }
+
+            window.dispatchEvent(new CustomEvent('languagechange', { detail: { language } }));
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('language-toggle')?.addEventListener('click', () => {
+                localStorage.setItem(LANGUAGE_KEY, getLanguage() === 'en' ? 'kn' : 'en');
+                applyLanguage();
+            });
+
+            applyLanguage();
+        });
+    </script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav>
+        <a href="/" class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+            Family Tree
+        </a>
+        <div class="links">
+            <a href="/tree">Tree View</a>
+            <a href="/lineage">Lineage</a>
+            <a href="/relationship">Find Relationship</a>
+            <a href="/admin">Admin</a>
+            <button type="button" id="language-toggle" class="language-toggle" aria-label="Switch language">ಕನ್ನಡ</button>
+        </div>
+    </nav>
+    
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>
