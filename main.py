@@ -93,14 +93,18 @@ async def get_lineage(person_id: int, db: Session = Depends(get_db)):
     if not person:
         return {"error": "Person not found"}
 
-    path = []
+    ancestors = []
     current = person
     while current:
-        path.append(person_payload(current, selected=current.id == person.id))
+        ancestors.append(person_payload(current, selected=current.id == person.id))
         current = db.query(Person).filter(Person.id == current.parent_id).first() if current.parent_id else None
 
-    path.reverse()
-    return {"selected_id": person.id, "path": path}
+    ancestors.reverse()
+    return {
+        "selected_id": person.id,
+        "path": ancestors,
+        "tree": person_tree(person, db, selected_id=person.id),
+    }
 
 @app.get("/relationship", response_class=HTMLResponse)
 async def relationship_view(request: Request, db: Session = Depends(get_db)):
@@ -145,6 +149,20 @@ def person_payload(person, selected=False):
         "gender": person.gender,
         "selected": selected,
     }
+
+def person_tree(person, db, selected_id=None, visited=None):
+    visited = visited or set()
+    if person.id in visited:
+        return person_payload(person, selected=person.id == selected_id)
+
+    visited.add(person.id)
+    payload = person_payload(person, selected=person.id == selected_id)
+    children = db.query(Person).filter(Person.parent_id == person.id).order_by(Person.name_kn).all()
+    payload["children"] = [
+        person_tree(child, db, selected_id=selected_id, visited=visited.copy())
+        for child in children
+    ]
+    return payload
 
 def get_generation_levels(persons):
     by_id = {person.id: person for person in persons}

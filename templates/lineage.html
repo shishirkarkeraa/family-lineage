@@ -43,16 +43,38 @@
     function renderLineage() {
         const container = document.getElementById('result');
         container.innerHTML = '';
-        if (currentLineage) {
+
+        if (!currentLineage) {
+            return;
+        }
+
+        if (currentLineage.path?.length) {
+            const parentSection = document.createElement('div');
+            parentSection.className = 'lineage-section';
+
             currentLineage.path.forEach((node, index) => {
-                container.appendChild(renderLineageNode(node));
+                parentSection.appendChild(renderLineageNode(node));
                 if (index < currentLineage.path.length - 1) {
-                    const connector = document.createElement('div');
-                    connector.className = 'lineage-connector';
-                    container.appendChild(connector);
+                    parentSection.appendChild(renderConnector());
                 }
             });
+
+            container.appendChild(parentSection);
         }
+
+        if (currentLineage.tree?.children?.length) {
+            const childrenSection = document.createElement('div');
+            childrenSection.className = 'descendant-section';
+            childrenSection.appendChild(renderConnector());
+            childrenSection.appendChild(renderChildren(currentLineage.tree.children));
+            container.appendChild(childrenSection);
+        }
+    }
+
+    function renderConnector() {
+        const connector = document.createElement('div');
+        connector.className = 'lineage-connector';
+        return connector;
     }
     
     function renderLineageNode(node) {
@@ -63,6 +85,25 @@
             personDiv.textContent += ` (${node.gender})`;
         }
         return personDiv;
+    }
+
+    function renderChildren(children) {
+        const group = document.createElement('div');
+        group.className = 'children-group';
+
+        children.forEach((child) => {
+            const branch = document.createElement('div');
+            branch.className = 'child-branch';
+            branch.appendChild(renderLineageNode(child));
+
+            if (child.children?.length) {
+                branch.appendChild(renderChildren(child.children));
+            }
+
+            group.appendChild(branch);
+        });
+
+        return group;
     }
 
     window.addEventListener('languagechange', renderLineage);
