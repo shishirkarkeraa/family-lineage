@@ -3,7 +3,7 @@
 {% block content %}
 <div class="card">
     <h2>Find Relationship</h2>
-    <p class="mb-4 text-secondary">Select two people to find their common ancestor.</p>
+    <p class="mb-4 text-secondary">Select two people to find their relationship.</p>
     
     <div class="flex gap-4 items-center mb-4">
         <select id="p1-select">
@@ -48,34 +48,7 @@
 
         const data = currentRelationship;
         const container = document.getElementById('result');
-        container.innerHTML = `<h3>${relationshipForLanguage(data)}</h3>`;
-        
-        if (data.path && data.path.length > 0) {
-            const pathDiv = document.createElement('div');
-            pathDiv.className = 'mt-4';
-            
-            data.path.forEach((node, index) => {
-                const nodeSpan = document.createElement('span');
-                nodeSpan.className = 'path-node';
-                nodeSpan.textContent = nameForLanguage(node);
-                
-                if (node.id === data.lca.id) {
-                    nodeSpan.style.borderColor = '#db2777';
-                    nodeSpan.style.background = 'rgba(219, 39, 119, 0.1)';
-                }
-                
-                pathDiv.appendChild(nodeSpan);
-                
-                if (index < data.path.length - 1) {
-                    const arrow = document.createElement('span');
-                    arrow.className = 'arrow';
-                    arrow.innerHTML = '&harr;';
-                    pathDiv.appendChild(arrow);
-                }
-            });
-            
-            container.appendChild(pathDiv);
-        }
+        container.innerHTML = `<div class="relationship-result"><h3>${relationshipForLanguage(data)}</h3></div>`;
     }
 
     window.addEventListener('languagechange', renderRelationship);

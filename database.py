@@ -46,8 +46,22 @@ class Person(Base):
 
     children = relationship("Person", backref="parent", remote_side=[id])
 
+class AdminCredential(Base):
+    __tablename__ = "admin_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    password = Column(String, nullable=False)
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        credential = db.query(AdminCredential).first()
+        if not credential:
+            db.add(AdminCredential(password="admusr"))
+            db.commit()
+    finally:
+        db.close()
 
 def to_english(kannada_text):
     if not kannada_text:

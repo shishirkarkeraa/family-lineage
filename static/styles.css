@@ -1,12 +1,12 @@
 :root {
-  --bg-color: #0f172a;
-  --surface-color: rgba(30, 41, 59, 0.7);
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --accent-color: #3b82f6;
-  --accent-hover: #2563eb;
-  --border-color: rgba(255, 255, 255, 0.1);
-  --glass-blur: 12px;
+  --bg-color: #000000;
+  --surface-color: #080808;
+  --surface-soft: #101010;
+  --text-primary: #f5f5f5;
+  --text-secondary: #a3a3a3;
+  --accent-color: #22c55e;
+  --accent-hover: #16a34a;
+  --border-color: #242424;
 }
 
 body {
@@ -22,23 +22,17 @@ body {
 body::before {
   content: '';
   position: fixed;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.15) 0%, rgba(15, 23, 42, 0) 50%);
+  inset: 0;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 40px 40px;
   z-index: -1;
-  animation: pulse 15s infinite alternate;
-}
-
-@keyframes pulse {
-  0% { transform: scale(1); }
-  100% { transform: scale(1.1); }
+  pointer-events: none;
 }
 
 nav {
   background: var(--surface-color);
-  backdrop-filter: blur(var(--glass-blur));
   border-bottom: 1px solid var(--border-color);
   padding: 1rem 2rem;
   display: flex;
@@ -81,14 +75,14 @@ nav .links a:hover, nav .links a.active {
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.8);
+  background: var(--surface-soft);
   color: var(--text-primary);
   font-size: 0.9rem;
   line-height: 1;
 }
 
 .language-toggle:hover {
-  background: rgba(59, 130, 246, 0.25);
+  background: #171717;
 }
 
 .container {
@@ -102,11 +96,10 @@ nav .links a:hover, nav .links a.active {
 
 .card {
   background: var(--surface-color);
-  backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--border-color);
-  border-radius: 16px;
+  border-radius: 8px;
   padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
 h1, h2, h3 {
@@ -114,8 +107,12 @@ h1, h2, h3 {
   font-weight: 600;
 }
 
+.text-secondary {
+  color: var(--text-secondary);
+}
+
 select, button {
-  background: rgba(15, 23, 42, 0.8);
+  background: var(--surface-soft);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   padding: 0.75rem 1rem;
@@ -131,8 +128,8 @@ select:focus {
 }
 
 select option {
-  background: #0f172a;
-  color: #f8fafc;
+  background: #050505;
+  color: var(--text-primary);
 }
 
 button {
@@ -164,15 +161,31 @@ button:active {
 
 .lineage-container {
   margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .person-node {
-  background: rgba(255,255,255,0.05);
+  background: var(--surface-soft);
   border: 1px solid var(--border-color);
   padding: 1rem;
   border-radius: 8px;
   margin-bottom: 0.5rem;
   display: inline-block;
+}
+
+.selected-person-node {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.lineage-connector {
+  width: 2px;
+  height: 1.25rem;
+  margin: 0 0 0.5rem 1.5rem;
+  background: var(--border-color);
 }
 
 .children-group {
@@ -183,7 +196,7 @@ button:active {
 
 .path-node {
   padding: 0.5rem 1rem;
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(34, 197, 94, 0.12);
   border: 1px solid var(--accent-color);
   border-radius: 20px;
   display: inline-block;
@@ -194,4 +207,45 @@ button:active {
   display: inline-block;
   margin: 0 0.5rem;
   color: var(--text-secondary);
+}
+
+.relationship-result {
+  padding: 1.25rem;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid var(--accent-color);
+  border-radius: 8px;
+}
+
+.relationship-result h3 {
+  margin: 0;
+}
+
+footer {
+  border-top: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 1.25rem 1rem;
+  text-align: center;
+  background: var(--surface-color);
+  font-size: 0.95rem;
+}
+
+@media (max-width: 720px) {
+  nav,
+  nav .links,
+  .flex {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  nav {
+    gap: 1rem;
+  }
+
+  nav .links {
+    gap: 0.85rem;
+  }
+
+  .card {
+    padding: 1.25rem;
+  }
 }

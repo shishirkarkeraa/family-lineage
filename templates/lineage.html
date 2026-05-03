@@ -3,7 +3,7 @@
 {% block content %}
 <div class="card">
     <h2>Lineage Finder</h2>
-    <p class="mb-4 text-secondary">Select a person to view their descendants.</p>
+    <p class="mb-4 text-secondary">Select a person to view their lineage.</p>
     
     <div class="flex gap-4 items-center">
         <select id="person-select">
@@ -44,31 +44,25 @@
         const container = document.getElementById('result');
         container.innerHTML = '';
         if (currentLineage) {
-            container.appendChild(renderNode(currentLineage));
+            currentLineage.path.forEach((node, index) => {
+                container.appendChild(renderLineageNode(node));
+                if (index < currentLineage.path.length - 1) {
+                    const connector = document.createElement('div');
+                    connector.className = 'lineage-connector';
+                    container.appendChild(connector);
+                }
+            });
         }
     }
     
-    function renderNode(node) {
-        const div = document.createElement('div');
-        
+    function renderLineageNode(node) {
         const personDiv = document.createElement('div');
-        personDiv.className = 'person-node';
+        personDiv.className = node.selected ? 'person-node selected-person-node' : 'person-node';
         personDiv.textContent = nameForLanguage(node);
         if (node.gender) {
             personDiv.textContent += ` (${node.gender})`;
         }
-        div.appendChild(personDiv);
-        
-        if (node.children && node.children.length > 0) {
-            const childrenGroup = document.createElement('div');
-            childrenGroup.className = 'children-group';
-            node.children.forEach(child => {
-                childrenGroup.appendChild(renderNode(child));
-            });
-            div.appendChild(childrenGroup);
-        }
-        
-        return div;
+        return personDiv;
     }
 
     window.addEventListener('languagechange', renderLineage);
