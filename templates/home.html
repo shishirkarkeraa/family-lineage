@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="home-hero">
+    <div>
+        <h1 data-i18n="site_title">ಕಾರ್ಕೇರ ಕುಟುಂಬ</h1>
+        <p class="text-secondary" data-i18n="home_hero_copy">ವಂಶವೃಕ್ಷ, ತಲೆಮಾರುಗಳು ಮತ್ತು ದಾಖಲಾದ ಸಂಬಂಧಗಳ ಜೀವಂತ ಅವಲೋಕನ.</p>
+    </div>
+    <div class="home-actions">
+        <a class="button-link" href="/tree" data-i18n="view_tree">ವಂಶವೃಕ್ಷ ನೋಡಿ</a>
+        <a class="button-link secondary" href="/profile" data-i18n="nav_profile">ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಪಡೆಯಿರಿ</a>
+    </div>
+</section>
+
+<section class="dashboard-grid">
+    <article class="metric-card primary">
+        <span data-i18n="total_people">ಒಟ್ಟು ಜನರು</span>
+        <strong>{{ stats.total_people }}</strong>
+    </article>
+    <article class="metric-card">
+        <span data-i18n="total_generations">ಒಟ್ಟು ತಲೆಮಾರುಗಳು</span>
+        <strong>{{ stats.total_generations }}</strong>
+    </article>
+    <article class="metric-card">
+        <span data-i18n="direct_parent_links">ನೇರ ಪೋಷಕ ಸಂಪರ್ಕಗಳು</span>
+        <strong>{{ stats.direct_relationships }}</strong>
+    </article>
+    <article class="metric-card">
+        <span data-i18n="family_roots">ಕುಟುಂಬದ ಬೇರುಗಳು</span>
+        <strong>{{ stats.root_count }}</strong>
+    </article>
+    <article class="metric-card">
+        <span data-i18n="members_with_children">ಮಕ್ಕಳಿರುವ ಸದಸ್ಯರು</span>
+        <strong>{{ stats.members_with_children }}</strong>
+    </article>
+    <article class="metric-card">
+        <span data-i18n="youngest_branch_members">ಕಿರಿಯ ಶಾಖೆಯ ಸದಸ್ಯರು</span>
+        <strong>{{ stats.leaf_members }}</strong>
+    </article>
+    <article class="metric-card">
+        <span data-i18n="average_children">ಸರಾಸರಿ ಮಕ್ಕಳು</span>
+        <strong>{{ stats.average_children }}</strong>
+    </article>
+    <article class="metric-card">
+        <span data-i18n="most_children_recorded">ಅತಿ ಹೆಚ್ಚು ಮಕ್ಕಳು ದಾಖಲಾಗಿದೆ</span>
+        <strong>{{ stats.max_children }}</strong>
+    </article>
+</section>
+
+<section class="home-panels">
+    <article class="profile-panel">
+        <h2 data-i18n="generation_spread">ತಲೆಮಾರುಗಳ ವಿಸ್ತರಣೆ</h2>
+        <div class="generation-bars">
+            {% for item in stats.generation_counts %}
+                <div class="generation-row">
+                    <span data-i18n="generation_label" data-generation="{{ item.generation }}">{{ item.generation }}ನೇ ತಲೆಮಾರು</span>
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width: {{ (item.count / stats.largest_generation.count * 100) if stats.largest_generation.count else 0 }}%"></div>
+                    </div>
+                    <strong>{{ item.count }}</strong>
+                </div>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="profile-panel">
+        <h2 data-i18n="recorded_details">ದಾಖಲಾದ ವಿವರಗಳು</h2>
+        <dl class="profile-details">
+            <dt data-i18n="largest_generation">ಅತಿದೊಡ್ಡ ತಲೆಮಾರು</dt>
+            <dd data-i18n="largest_generation_value" data-generation="{{ stats.largest_generation.generation }}" data-count="{{ stats.largest_generation.count }}">{{ stats.largest_generation.generation }}ನೇ ತಲೆಮಾರು, {{ stats.largest_generation.count }} ಜನ</dd>
+            <dt data-i18n="english_names">ಇಂಗ್ಲಿಷ್ ಹೆಸರುಗಳು</dt>
+            <dd>{{ stats.names_with_english }}</dd>
+            <dt data-i18n="kannada_names">ಕನ್ನಡ ಹೆಸರುಗಳು</dt>
+            <dd>{{ stats.names_with_kannada }}</dd>
+            <dt data-i18n="male_records">ಪುರುಷ ದಾಖಲೆಗಳು</dt>
+            <dd>{{ stats.gender_counts.male }}</dd>
+            <dt data-i18n="female_records">ಮಹಿಳಾ ದಾಖಲೆಗಳು</dt>
+            <dd>{{ stats.gender_counts.female }}</dd>
+            <dt data-i18n="gender_not_recorded">ಲಿಂಗ ದಾಖಲಾಗಿಲ್ಲ</dt>
+            <dd>{{ stats.gender_counts.not_recorded }}</dd>
+        </dl>
+    </article>
+
+    <article class="profile-panel">
+        <h2 data-i18n="family_roots">ಕುಟುಂಬದ ಬೇರುಗಳು</h2>
+        <div class="profile-chip-list">
+            {% for person in stats.roots %}
+                <span class="profile-chip" data-name-en="{{ person.name_en }}" data-name-kn="{{ person.name_kn }}">{{ person.name_kn or person.name_en }}</span>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="profile-panel">
+        <h2 data-i18n="largest_direct_families">ಅತಿದೊಡ್ಡ ನೇರ ಕುಟುಂಬಗಳು</h2>
+        <dl class="relation-summary">
+            {% for family in stats.largest_families %}
+                <dt data-name-en="{{ family.person.name_en }}" data-name-kn="{{ family.person.name_kn }}">{{ family.person.name_kn or family.person.name_en }}</dt>
+                <dd><strong>{{ family.children_count }}</strong><span data-i18n="direct_children_recorded">ನೇರ ಮಕ್ಕಳು ದಾಖಲಾಗಿದ್ದಾರೆ</span></dd>
+            {% endfor %}
+        </dl>
+    </article>
+</section>
+{% endblock %}

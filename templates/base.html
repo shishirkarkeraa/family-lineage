@@ -1,16 +1,169 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="kn">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Karkera Family</title>
+    <title>ಕಾರ್ಕೇರ ಕುಟುಂಬ</title>
     <link rel="stylesheet" href="/static/styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script>
         const LANGUAGE_KEY = 'karkera-family-language';
+        const I18N = {
+            en: {
+                site_title: 'Karkera Family',
+                nav_home: 'Home',
+                nav_tree: 'Tree View',
+                nav_profile: 'Get Your Profile',
+                nav_relationship: 'Find Relationship',
+                toggle_label: 'English',
+                toggle_aria: 'Switch to Kannada',
+                footer_credit: 'Developed by Shishir Girish Karkera',
+                not_recorded: 'Not recorded',
+                not_specified: 'Not specified',
+                none_recorded: 'None recorded',
+                person_not_found: 'Person not found.',
+                male: 'Male',
+                female: 'Female',
+                unknown_gender: 'Not specified',
+                generation_of_total: '{generation} of {total}',
+                people_including_selected: '{count} people including selected person',
+                generation_label: 'Generation {generation}',
+                largest_generation_value: 'Generation {generation} with {count} people',
+                direct_children_recorded: 'direct children recorded',
+                home_hero_copy: 'A living overview of the family tree, generations, and recorded relationships.',
+                view_tree: 'View Tree',
+                total_people: 'Total People',
+                total_generations: 'Total Generations',
+                direct_parent_links: 'Direct Parent Links',
+                family_roots: 'Family Roots',
+                members_with_children: 'Members With Children',
+                youngest_branch_members: 'Youngest Branch Members',
+                average_children: 'Average Children',
+                most_children_recorded: 'Most Children Recorded',
+                generation_spread: 'Generation Spread',
+                recorded_details: 'Recorded Details',
+                largest_generation: 'Largest generation',
+                english_names: 'English names',
+                kannada_names: 'Kannada names',
+                male_records: 'Male records',
+                female_records: 'Female records',
+                gender_not_recorded: 'Gender not recorded',
+                largest_direct_families: 'Largest Direct Families',
+                complete_family: 'Complete Karkera Family',
+                profile_intro: 'Select a person to view their profile.',
+                select_person: '-- Select Person --',
+                get_profile: 'Get Profile',
+                lineage: 'Lineage',
+                english_name: 'English name',
+                kannada_name: 'Kannada name',
+                gender: 'Gender',
+                parent: 'Parent',
+                generation: 'Generation',
+                lineage_depth: 'Lineage depth',
+                descendant_generations: 'Descendant generations',
+                family_stats: 'Family Stats',
+                direct_children: 'Direct children',
+                total_descendants: 'Total descendants',
+                direct_siblings: 'Direct siblings',
+                brothers: 'Brothers',
+                sisters: 'Sisters',
+                unspecified_siblings: 'Unspecified siblings',
+                known_relations: 'Known relations',
+                ancestors: 'Ancestors',
+                siblings: 'Siblings',
+                children: 'Children',
+                relation_breakdown: 'Relation Breakdown',
+                relation_note: 'Generation apart means one person is above or below the other in the family tree.',
+                no_other_relations: 'No other relations found',
+                relationship_intro: 'Select two people to find their relationship.',
+                person_1: '-- Person 1 --',
+                person_2: '-- Person 2 --',
+                and: 'and',
+                find: 'Find'
+            },
+            kn: {
+                site_title: 'ಕಾರ್ಕೇರ ಕುಟುಂಬ',
+                nav_home: 'ಮುಖಪುಟ',
+                nav_tree: 'ವಂಶವೃಕ್ಷ',
+                nav_profile: 'ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಪಡೆಯಿರಿ',
+                nav_relationship: 'ಸಂಬಂಧ ಹುಡುಕಿ',
+                toggle_label: 'ಕನ್ನಡ',
+                toggle_aria: 'ಇಂಗ್ಲಿಷ್‌ಗೆ ಬದಲಿಸಿ',
+                footer_credit: 'ಶಿಶಿರ್ ಗಿರೀಶ್ ಕಾರ್ಕೇರ ಅವರಿಂದ ಅಭಿವೃದ್ಧಿಪಡಿಸಲಾಗಿದೆ',
+                not_recorded: 'ದಾಖಲಾಗಿಲ್ಲ',
+                not_specified: 'ನಿರ್ದಿಷ್ಟಪಡಿಸಲಾಗಿಲ್ಲ',
+                none_recorded: 'ಯಾವುದೂ ದಾಖಲಾಗಿಲ್ಲ',
+                person_not_found: 'ವ್ಯಕ್ತಿ ಕಂಡುಬಂದಿಲ್ಲ.',
+                male: 'ಪುರುಷ',
+                female: 'ಮಹಿಳೆ',
+                unknown_gender: 'ನಿರ್ದಿಷ್ಟಪಡಿಸಲಾಗಿಲ್ಲ',
+                generation_of_total: '{generation} / {total}',
+                people_including_selected: 'ಆಯ್ಕೆ ಮಾಡಿದ ವ್ಯಕ್ತಿಯನ್ನು ಸೇರಿಸಿ {count} ಜನ',
+                generation_label: '{generation}ನೇ ತಲೆಮಾರು',
+                largest_generation_value: '{generation}ನೇ ತಲೆಮಾರು, {count} ಜನ',
+                direct_children_recorded: 'ನೇರ ಮಕ್ಕಳು ದಾಖಲಾಗಿದ್ದಾರೆ',
+                home_hero_copy: 'ವಂಶವೃಕ್ಷ, ತಲೆಮಾರುಗಳು ಮತ್ತು ದಾಖಲಾದ ಸಂಬಂಧಗಳ ಜೀವಂತ ಅವಲೋಕನ.',
+                view_tree: 'ವಂಶವೃಕ್ಷ ನೋಡಿ',
+                total_people: 'ಒಟ್ಟು ಜನರು',
+                total_generations: 'ಒಟ್ಟು ತಲೆಮಾರುಗಳು',
+                direct_parent_links: 'ನೇರ ಪೋಷಕ ಸಂಪರ್ಕಗಳು',
+                family_roots: 'ಕುಟುಂಬದ ಬೇರುಗಳು',
+                members_with_children: 'ಮಕ್ಕಳಿರುವ ಸದಸ್ಯರು',
+                youngest_branch_members: 'ಕಿರಿಯ ಶಾಖೆಯ ಸದಸ್ಯರು',
+                average_children: 'ಸರಾಸರಿ ಮಕ್ಕಳು',
+                most_children_recorded: 'ಅತಿ ಹೆಚ್ಚು ಮಕ್ಕಳು ದಾಖಲಾಗಿದೆ',
+                generation_spread: 'ತಲೆಮಾರುಗಳ ವಿಸ್ತರಣೆ',
+                recorded_details: 'ದಾಖಲಾದ ವಿವರಗಳು',
+                largest_generation: 'ಅತಿದೊಡ್ಡ ತಲೆಮಾರು',
+                english_names: 'ಇಂಗ್ಲಿಷ್ ಹೆಸರುಗಳು',
+                kannada_names: 'ಕನ್ನಡ ಹೆಸರುಗಳು',
+                male_records: 'ಪುರುಷ ದಾಖಲೆಗಳು',
+                female_records: 'ಮಹಿಳಾ ದಾಖಲೆಗಳು',
+                gender_not_recorded: 'ಲಿಂಗ ದಾಖಲಾಗಿಲ್ಲ',
+                largest_direct_families: 'ಅತಿದೊಡ್ಡ ನೇರ ಕುಟುಂಬಗಳು',
+                complete_family: 'ಸಂಪೂರ್ಣ ಕಾರ್ಕೇರ ಕುಟುಂಬ',
+                profile_intro: 'ಅವರ ಪ್ರೊಫೈಲ್ ನೋಡಲು ವ್ಯಕ್ತಿಯನ್ನು ಆಯ್ಕೆಮಾಡಿ.',
+                select_person: '-- ವ್ಯಕ್ತಿಯನ್ನು ಆಯ್ಕೆಮಾಡಿ --',
+                get_profile: 'ಪ್ರೊಫೈಲ್ ಪಡೆಯಿರಿ',
+                lineage: 'ವಂಶಾವಳಿ',
+                english_name: 'ಇಂಗ್ಲಿಷ್ ಹೆಸರು',
+                kannada_name: 'ಕನ್ನಡ ಹೆಸರು',
+                gender: 'ಲಿಂಗ',
+                parent: 'ಪೋಷಕರು',
+                generation: 'ತಲೆಮಾರು',
+                lineage_depth: 'ವಂಶಾವಳಿ ಆಳ',
+                descendant_generations: 'ವಂಶಜರ ತಲೆಮಾರುಗಳು',
+                family_stats: 'ಕುಟುಂಬ ಅಂಕಿಅಂಶಗಳು',
+                direct_children: 'ನೇರ ಮಕ್ಕಳು',
+                total_descendants: 'ಒಟ್ಟು ವಂಶಜರು',
+                direct_siblings: 'ನೇರ ಸಹೋದರರು',
+                brothers: 'ಸಹೋದರರು',
+                sisters: 'ಸಹೋದರಿಯರು',
+                unspecified_siblings: 'ನಿರ್ದಿಷ್ಟಪಡಿಸದ ಸಹೋದರರು',
+                known_relations: 'ತಿಳಿದಿರುವ ಸಂಬಂಧಗಳು',
+                ancestors: 'ಪೂರ್ವಜರು',
+                siblings: 'ಸಹೋದರರು/ಸಹೋದರಿಯರು',
+                children: 'ಮಕ್ಕಳು',
+                relation_breakdown: 'ಸಂಬಂಧ ವಿವರ',
+                relation_note: 'ತಲೆಮಾರುಗಳ ಅಂತರ ಎಂದರೆ ಒಬ್ಬರು ಕುಟುಂಬ ವೃಕ್ಷದಲ್ಲಿ ಮತ್ತೊಬ್ಬರಿಗಿಂತ ಮೇಲೆ ಅಥವಾ ಕೆಳಗೆ ಇರುವುದು.',
+                no_other_relations: 'ಇತರೆ ಸಂಬಂಧಗಳು ಕಂಡುಬಂದಿಲ್ಲ',
+                relationship_intro: 'ಅವರ ಸಂಬಂಧ ತಿಳಿಯಲು ಇಬ್ಬರನ್ನು ಆಯ್ಕೆಮಾಡಿ.',
+                person_1: '-- ವ್ಯಕ್ತಿ 1 --',
+                person_2: '-- ವ್ಯಕ್ತಿ 2 --',
+                and: 'ಮತ್ತು',
+                find: 'ಹುಡುಕಿ'
+            }
+        };
 
         function getLanguage() {
             return localStorage.getItem(LANGUAGE_KEY) || 'kn';
+        }
+
+        function t(key, params = {}) {
+            const language = getLanguage();
+            const dictionary = I18N[language] || I18N.kn;
+            const fallback = I18N.en[key] || key;
+            return (dictionary[key] || fallback).replace(/\{(\w+)\}/g, (_, name) => params[name] ?? '');
         }
 
         function nameForLanguage(item) {
@@ -33,18 +186,33 @@
                 : (relationshipKn || relationshipEn || '');
         }
 
+        function genderForLanguage(gender) {
+            if (gender === 'Male') return t('male');
+            if (gender === 'Female') return t('female');
+            return t('unknown_gender');
+        }
+
         function applyLanguage() {
             const language = getLanguage();
             document.documentElement.lang = language === 'en' ? 'en' : 'kn';
+            document.title = t('site_title');
 
             document.querySelectorAll('[data-name-en], [data-name-kn]').forEach((element) => {
                 element.textContent = nameForLanguage(element.dataset);
             });
 
+            document.querySelectorAll('[data-i18n]').forEach((element) => {
+                element.textContent = t(element.dataset.i18n, element.dataset);
+            });
+
+            document.querySelectorAll('[data-i18n-aria-label]').forEach((element) => {
+                element.setAttribute('aria-label', t(element.dataset.i18nAriaLabel));
+            });
+
             const toggle = document.getElementById('language-toggle');
             if (toggle) {
-                toggle.textContent = language === 'en' ? 'English' : 'ಕನ್ನಡ';
-                toggle.setAttribute('aria-label', language === 'en' ? 'Switch to Kannada' : 'Switch to English');
+                toggle.textContent = t('toggle_label');
+                toggle.setAttribute('aria-label', t('toggle_aria'));
             }
 
             window.dispatchEvent(new CustomEvent('languagechange', { detail: { language } }));
@@ -65,13 +233,14 @@
     <nav>
         <a href="/" class="logo">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-            Karkera Family
+            <span data-i18n="site_title">ಕಾರ್ಕೇರ ಕುಟುಂಬ</span>
         </a>
         <div class="links">
-            <a href="/tree">Tree View</a>
-            <a href="/lineage">Lineage</a>
-            <a href="/relationship">Find Relationship</a>
-            <button type="button" id="language-toggle" class="language-toggle" aria-label="Switch language">ಕನ್ನಡ</button>
+            <a href="/" data-i18n="nav_home">ಮುಖಪುಟ</a>
+            <a href="/tree" data-i18n="nav_tree">ವಂಶವೃಕ್ಷ</a>
+            <a href="/profile" data-i18n="nav_profile">ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಪಡೆಯಿರಿ</a>
+            <a href="/relationship" data-i18n="nav_relationship">ಸಂಬಂಧ ಹುಡುಕಿ</a>
+            <button type="button" id="language-toggle" class="language-toggle" aria-label="ಇಂಗ್ಲಿಷ್‌ಗೆ ಬದಲಿಸಿ">ಕನ್ನಡ</button>
         </div>
     </nav>
     
@@ -79,7 +248,7 @@
         {% block content %}{% endblock %}
     </div>
     <footer>
-        Developed by Shishir Girish Karkera
+        <span data-i18n="footer_credit">ಶಿಶಿರ್ ಗಿರೀಶ್ ಕರ್ಕೇರ ಅವರಿಂದ ಅಭಿವೃದ್ಧಿಪಡಿಸಲಾಗಿದೆ</span>
     </footer>
 </body>
 </html>

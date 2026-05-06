@@ -2,27 +2,27 @@
 
 {% block content %}
 <div class="card">
-    <h2>Find Relationship</h2>
-    <p class="mb-4 text-secondary">Select two people to find their relationship.</p>
+    <h2 data-i18n="nav_relationship">ಸಂಬಂಧ ಹುಡುಕಿ</h2>
+    <p class="mb-4 text-secondary" data-i18n="relationship_intro">ಅವರ ಸಂಬಂಧ ತಿಳಿಯಲು ಇಬ್ಬರನ್ನು ಆಯ್ಕೆಮಾಡಿ.</p>
     
     <div class="flex gap-4 items-center mb-4">
         <select id="p1-select">
-            <option value="">-- Person 1 --</option>
+            <option value="" data-i18n="person_1">-- ವ್ಯಕ್ತಿ 1 --</option>
             {% for p in persons %}
                 <option value="{{ p.id }}" data-name-en="{{ p.name_en }}" data-name-kn="{{ p.name_kn }}">{{ p.name_kn }}</option>
             {% endfor %}
         </select>
         
-        <span style="color: var(--text-secondary)">and</span>
+        <span style="color: var(--text-secondary)" data-i18n="and">ಮತ್ತು</span>
         
         <select id="p2-select">
-            <option value="">-- Person 2 --</option>
+            <option value="" data-i18n="person_2">-- ವ್ಯಕ್ತಿ 2 --</option>
             {% for p in persons %}
                 <option value="{{ p.id }}" data-name-en="{{ p.name_en }}" data-name-kn="{{ p.name_kn }}">{{ p.name_kn }}</option>
             {% endfor %}
         </select>
         
-        <button onclick="findRelationship()">Find</button>
+        <button onclick="findRelationship()" data-i18n="find">ಹುಡುಕಿ</button>
     </div>
     
     <div id="result" class="mt-8"></div>
@@ -48,7 +48,13 @@
 
         const data = currentRelationship;
         const container = document.getElementById('result');
-        container.innerHTML = `<div class="relationship-result"><h3>${relationshipForLanguage(data)}</h3></div>`;
+        container.innerHTML = '';
+        const result = document.createElement('div');
+        result.className = 'relationship-result';
+        const heading = document.createElement('h3');
+        heading.textContent = relationshipForLanguage(data);
+        result.appendChild(heading);
+        container.appendChild(result);
     }
 
     window.addEventListener('languagechange', renderRelationship);

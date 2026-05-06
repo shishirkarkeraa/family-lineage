@@ -2,17 +2,17 @@
 
 {% block content %}
 <div class="card">
-    <h2>Lineage Finder</h2>
-    <p class="mb-4 text-secondary">Select a person to view their lineage.</p>
+    <h2 data-i18n="nav_profile">ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಪಡೆಯಿರಿ</h2>
+    <p class="mb-4 text-secondary" data-i18n="profile_intro">ಅವರ ಪ್ರೊಫೈಲ್ ನೋಡಲು ವ್ಯಕ್ತಿಯನ್ನು ಆಯ್ಕೆಮಾಡಿ.</p>
     
     <div class="flex gap-4 items-center">
         <select id="person-select">
-            <option value="">-- Select Person --</option>
+            <option value="" data-i18n="select_person">-- ವ್ಯಕ್ತಿಯನ್ನು ಆಯ್ಕೆಮಾಡಿ --</option>
             {% for p in persons %}
                 <option value="{{ p.id }}" data-name-en="{{ p.name_en }}" data-name-kn="{{ p.name_kn }}">{{ p.name_kn }}</option>
             {% endfor %}
         </select>
-        <button onclick="fetchLineage()">Find Lineage</button>
+        <button onclick="fetchLineage()" data-i18n="get_profile">ಪ್ರೊಫೈಲ್ ಪಡೆಯಿರಿ</button>
     </div>
     
     <div id="result" class="lineage-container"></div>
@@ -25,14 +25,17 @@
         const id = document.getElementById('person-select').value;
         if (!id) return;
         
-        const res = await fetch(`/api/lineage/${id}`);
+        const res = await fetch(`/api/profile/${id}`);
         const data = await res.json();
         
         const container = document.getElementById('result');
         container.innerHTML = '';
         
         if (data.error) {
-            container.innerHTML = `<p style="color: #ef4444">${data.error}</p>`;
+            const error = document.createElement('p');
+            error.style.color = '#ef4444';
+            error.textContent = relationshipForLanguage(data) || t('person_not_found');
+            container.appendChild(error);
             return;
         }
 
@@ -48,6 +51,18 @@
             return;
         }
 
+        const profile = currentLineage.profile;
+        if (profile) {
+            container.appendChild(renderProfileSummary(profile));
+        }
+
+        const lineagePanel = document.createElement('div');
+        lineagePanel.className = 'profile-panel';
+
+        const lineageTitle = document.createElement('h3');
+        lineageTitle.textContent = t('lineage');
+        lineagePanel.appendChild(lineageTitle);
+
         if (currentLineage.path?.length) {
             const parentSection = document.createElement('div');
             parentSection.className = 'lineage-section';
@@ -59,7 +74,7 @@
                 }
             });
 
-            container.appendChild(parentSection);
+            lineagePanel.appendChild(parentSection);
         }
 
         if (currentLineage.tree?.children?.length) {
@@ -67,8 +82,10 @@
             childrenSection.className = 'descendant-section';
             childrenSection.appendChild(renderConnector());
             childrenSection.appendChild(renderChildren(currentLineage.tree.children));
-            container.appendChild(childrenSection);
+            lineagePanel.appendChild(childrenSection);
         }
+
+        container.appendChild(lineagePanel);
     }
 
     function renderConnector() {
@@ -82,9 +99,165 @@
         personDiv.className = node.selected ? 'person-node selected-person-node' : 'person-node';
         personDiv.textContent = nameForLanguage(node);
         if (node.gender) {
-            personDiv.textContent += ` (${node.gender})`;
+            personDiv.textContent += ` (${genderForLanguage(node.gender)})`;
         }
         return personDiv;
+    }
+
+    function renderProfileSummary(profile) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'profile-grid';
+
+        const detailsPanel = document.createElement('div');
+        detailsPanel.className = 'profile-panel profile-main';
+
+        const personName = document.createElement('h3');
+        personName.textContent = nameForLanguage(profile.person);
+        detailsPanel.appendChild(personName);
+
+        const nameDetails = getLanguage() === 'en'
+            ? [
+                [t('english_name'), profile.person.name_en || '-'],
+                [t('kannada_name'), profile.person.name_kn || '-']
+            ]
+            : [[t('kannada_name'), profile.person.name_kn || '-']];
+
+        detailsPanel.appendChild(renderDetailList([
+            ...nameDetails,
+            [t('gender'), genderForLanguage(profile.person.gender)],
+            [t('parent'), profile.parent ? nameForLanguage(profile.parent) : t('not_recorded')],
+            [t('generation'), t('generation_of_total', { generation: profile.generation, total: profile.total_family_generations })],
+            [t('lineage_depth'), t('people_including_selected', { count: profile.lineage_depth })],
+            [t('descendant_generations'), String(profile.descendant_generations)]
+        ]));
+
+        wrapper.appendChild(detailsPanel);
+
+        const statsPanel = document.createElement('div');
+        statsPanel.className = 'profile-panel';
+        const statsTitle = document.createElement('h3');
+        statsTitle.textContent = t('family_stats');
+        statsPanel.appendChild(statsTitle);
+        statsPanel.appendChild(renderStats([
+            [t('direct_children'), profile.direct_children_count],
+            [t('total_descendants'), profile.descendant_count],
+            [t('direct_siblings'), profile.sibling_count],
+            [t('brothers'), profile.brother_count],
+            [t('sisters'), profile.sister_count],
+            [t('unspecified_siblings'), profile.unknown_gender_sibling_count],
+            [t('known_relations'), profile.known_relation_count],
+            [t('ancestors'), profile.ancestor_count]
+        ]));
+        wrapper.appendChild(statsPanel);
+
+        wrapper.appendChild(renderPeoplePanel(t('siblings'), profile.siblings));
+        wrapper.appendChild(renderPeoplePanel(t('children'), profile.children));
+        wrapper.appendChild(renderRelationPanel(profile.relation_summary));
+
+        return wrapper;
+    }
+
+    function renderDetailList(items) {
+        const list = document.createElement('dl');
+        list.className = 'profile-details';
+
+        items.forEach(([label, value]) => {
+            const term = document.createElement('dt');
+            term.textContent = label;
+            const detail = document.createElement('dd');
+            detail.textContent = value;
+            list.append(term, detail);
+        });
+
+        return list;
+    }
+
+    function renderStats(items) {
+        const grid = document.createElement('div');
+        grid.className = 'stat-grid';
+
+        items.forEach(([label, value]) => {
+            const stat = document.createElement('div');
+            stat.className = 'stat-card';
+            const number = document.createElement('strong');
+            number.textContent = value;
+            const caption = document.createElement('span');
+            caption.textContent = label;
+            stat.append(number, caption);
+            grid.appendChild(stat);
+        });
+
+        return grid;
+    }
+
+    function renderPeoplePanel(title, people) {
+        const panel = document.createElement('div');
+        panel.className = 'profile-panel';
+        const heading = document.createElement('h3');
+        heading.textContent = title;
+        panel.appendChild(heading);
+
+        if (!people?.length) {
+            const empty = document.createElement('p');
+            empty.className = 'text-secondary';
+            empty.textContent = t('none_recorded');
+            panel.appendChild(empty);
+            return panel;
+        }
+
+        const list = document.createElement('div');
+        list.className = 'profile-chip-list';
+        people.forEach((person) => {
+            const chip = document.createElement('span');
+            chip.className = 'profile-chip';
+            chip.textContent = nameForLanguage(person);
+            list.appendChild(chip);
+        });
+        panel.appendChild(list);
+        return panel;
+    }
+
+    function renderRelationPanel(summary) {
+        const panel = document.createElement('div');
+        panel.className = 'profile-panel';
+        const heading = document.createElement('h3');
+        heading.textContent = t('relation_breakdown');
+        panel.appendChild(heading);
+
+        const note = document.createElement('p');
+        note.className = 'relation-note';
+        note.textContent = t('relation_note');
+        panel.appendChild(note);
+
+        if (!summary?.length) {
+            const empty = document.createElement('p');
+            empty.className = 'text-secondary';
+            empty.textContent = t('no_other_relations');
+            panel.appendChild(empty);
+            return panel;
+        }
+
+        const list = document.createElement('dl');
+        list.className = 'relation-summary';
+        summary.forEach((item) => {
+            const term = document.createElement('dt');
+            term.textContent = getLanguage() === 'en'
+                ? (item.label || item.relationship)
+                : (item.label_kn || item.relationship_kn || item.relationship);
+            const detail = document.createElement('dd');
+            const count = document.createElement('strong');
+            count.textContent = item.count;
+            detail.appendChild(count);
+            const descriptionText = getLanguage() === 'en' ? item.description : item.description_kn;
+            if (descriptionText) {
+                const description = document.createElement('span');
+                description.textContent = descriptionText;
+                detail.appendChild(description);
+            }
+            list.append(term, detail);
+        });
+        panel.appendChild(list);
+        return panel;
     }
 
     function renderChildren(children) {
