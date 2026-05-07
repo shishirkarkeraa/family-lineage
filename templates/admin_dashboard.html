@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="admin-shell">
+    <div class="admin-header">
+        <div>
+            <p class="admin-kicker">Admin</p>
+            <h1>Family Members</h1>
+        </div>
+        <div class="admin-actions">
+            <button type="button" class="admin-primary-button" id="open-new-user-modal">New user</button>
+            <form method="post" action="/admin/logout">
+                <button type="submit" class="admin-secondary-button">Logout</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="admin-panel">
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Name EN</th>
+                        <th>Name KN</th>
+                        <th>Gender</th>
+                        <th>Parent 1</th>
+                        <th>Parent 2</th>
+                        <th>Date of birth</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for person in people %}
+                    <tr>
+                        <td>{{ person.name_en or "-" }}</td>
+                        <td>{{ person.name_kn or "-" }}</td>
+                        <td>{{ person.gender or "-" }}</td>
+                        <td>{{ person.parent or "None" }}</td>
+                        <td>{{ person.parent2 or "None" }}</td>
+                        <td>{{ person.date_of_birth or "-" }}</td>
+                        <td><a href="/admin/users/{{ person.id }}/edit" class="admin-edit-link">Edit</a></td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="admin-empty">No users recorded yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="admin-modal-backdrop" id="new-user-modal" aria-hidden="true">
+        <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="new-user-title">
+            <div class="admin-modal-header">
+                <div>
+                    <p class="admin-kicker">Admin</p>
+                    <h2 id="new-user-title">Create user</h2>
+                </div>
+                <button type="button" class="admin-icon-button" id="close-new-user-modal" aria-label="Close">×</button>
+            </div>
+            <form method="post" action="/admin/users/new" class="admin-form admin-grid-form">
+                <label>
+                    <span>Name EN</span>
+                    <input type="text" name="name_en">
+                </label>
+                <label>
+                    <span>Name KN</span>
+                    <input type="text" name="name_kn">
+                </label>
+                <label>
+                    <span>Gender</span>
+                    <select name="gender">
+                        <option value="" selected>Not specified</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                    </select>
+                </label>
+                <label>
+                    <span>Date of birth</span>
+                    <input type="date" name="date_of_birth">
+                </label>
+                <label>
+                    <span>Parent 1</span>
+                    <select name="parent_id" class="js-person-search-select">
+                        <option value="">None</option>
+                        {% for parent in parents %}
+                        <option value="{{ parent.id }}" data-name-en="{{ parent.name_en or '' }}" data-name-kn="{{ parent.name_kn or '' }}">
+                            {{ [parent.name_en, parent.name_kn] | select | join(" / ") or ("Person #" ~ parent.id) }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    <span>Parent 2</span>
+                    <select name="parent2_id" class="js-person-search-select">
+                        <option value="">None</option>
+                        {% for parent in parents %}
+                        <option value="{{ parent.id }}" data-name-en="{{ parent.name_en or '' }}" data-name-kn="{{ parent.name_kn or '' }}">
+                            {{ [parent.name_en, parent.name_kn] | select | join(" / ") or ("Person #" ~ parent.id) }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <div class="admin-form-footer">
+                    <button type="submit" class="admin-primary-button">Create user</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.getElementById('new-user-modal');
+        const openButton = document.getElementById('open-new-user-modal');
+        const closeButton = document.getElementById('close-new-user-modal');
+        const firstInput = modal?.querySelector('input[name="name_en"]');
+
+        function setModalOpen(isOpen) {
+            if (!modal) return;
+            modal.classList.toggle('is-open', isOpen);
+            modal.setAttribute('aria-hidden', String(!isOpen));
+            document.body.classList.toggle('modal-open', isOpen);
+            if (isOpen) {
+                window.setTimeout(() => firstInput?.focus(), 60);
+            }
+        }
+
+        openButton?.addEventListener('click', () => setModalOpen(true));
+        closeButton?.addEventListener('click', () => setModalOpen(false));
+        modal?.addEventListener('click', (event) => {
+            if (event.target === modal) setModalOpen(false);
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && modal?.classList.contains('is-open')) {
+                setModalOpen(false);
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% set is_edit = person is not none %}
+
+{% block content %}
+<section class="admin-shell">
+    <div class="admin-header">
+        <div>
+            <p class="admin-kicker">Admin</p>
+            <h1>{{ "Edit user" if is_edit else "Create user" }}</h1>
+        </div>
+        <a href="/admin" class="admin-secondary-button">Back</a>
+    </div>
+
+    <div class="admin-panel">
+        {% if error %}
+        <p class="admin-error">{{ error }}</p>
+        {% endif %}
+        <form method="post" action="{{ '/admin/users/' ~ person.id ~ '/edit' if is_edit else '/admin/users/new' }}" class="admin-form admin-grid-form">
+            <label>
+                <span>Name EN</span>
+                <input type="text" name="name_en" value="{{ person.name_en if is_edit and person.name_en else '' }}">
+            </label>
+            <label>
+                <span>Name KN</span>
+                <input type="text" name="name_kn" value="{{ person.name_kn if is_edit and person.name_kn else '' }}">
+            </label>
+            <label>
+                <span>Gender</span>
+                <select name="gender">
+                    <option value="" {{ "selected" if not is_edit or not person.gender else "" }}>Not specified</option>
+                    <option value="Male" {{ "selected" if is_edit and person.gender == "Male" else "" }}>Male</option>
+                    <option value="Female" {{ "selected" if is_edit and person.gender == "Female" else "" }}>Female</option>
+                </select>
+            </label>
+            <label>
+                <span>Date of birth</span>
+                <input type="date" name="date_of_birth" value="{{ person.date_of_birth if is_edit and person.date_of_birth else '' }}">
+            </label>
+            <label>
+                <span>Parent 1</span>
+                <select name="parent_id" class="js-person-search-select">
+                    <option value="">None</option>
+                    {% for parent in parents %}
+                    <option value="{{ parent.id }}" data-name-en="{{ parent.name_en or '' }}" data-name-kn="{{ parent.name_kn or '' }}" {{ "selected" if is_edit and person.parent_id == parent.id else "" }}>
+                        {{ [parent.name_en, parent.name_kn] | select | join(" / ") or ("Person #" ~ parent.id) }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>
+                <span>Parent 2</span>
+                <select name="parent2_id" class="js-person-search-select">
+                    <option value="">None</option>
+                    {% for parent in parents %}
+                    <option value="{{ parent.id }}" data-name-en="{{ parent.name_en or '' }}" data-name-kn="{{ parent.name_kn or '' }}" {{ "selected" if is_edit and person.parent2_id == parent.id else "" }}>
+                        {{ [parent.name_en, parent.name_kn] | select | join(" / ") or ("Person #" ~ parent.id) }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <div class="admin-form-footer">
+                <button type="submit" class="admin-primary-button">{{ "Save changes" if is_edit else "Create user" }}</button>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

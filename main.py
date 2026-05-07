@@ -1,69 +1,229 @@
 import os
+import time
+from datetime import datetime
 
-from fastapi import FastAPI, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from sqladmin import Admin, ModelView
-from sqladmin.authentication import AuthenticationBackend
-from database import engine, get_db, migrate_person_name_columns, SessionLocal, Person, AdminCredential
+from starlette.middleware.sessions import SessionMiddleware
+from database import get_db, migrate_person_name_columns, Person, AdminCredential
 
 app = FastAPI(title="Karkera Family")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("ADMIN_SESSION_SECRET", "family-lineage-admin"),
+)
 
 @app.on_event("startup")
 def startup():
     migrate_person_name_columns()
 
-class AdminAuth(AuthenticationBackend):
-    async def login(self, request: Request) -> bool:
-        form = await request.form()
-        password = form.get("password")
-
-        db = SessionLocal()
-        try:
-            credential = db.query(AdminCredential).first()
-            if credential and password == credential.password:
-                request.session.update({"admin_logged_in": True})
-                return True
-        finally:
-            db.close()
-
-        return False
-
-    async def logout(self, request: Request) -> bool:
-        request.session.clear()
-        return True
-
-    async def authenticate(self, request: Request) -> bool:
-        return bool(request.session.get("admin_logged_in"))
-
-admin = Admin(
-    app,
-    engine,
-    authentication_backend=AdminAuth(
-        secret_key=os.getenv("ADMIN_SESSION_SECRET", "family-lineage-admin")
-    ),
-)
-
-class PersonAdmin(ModelView, model=Person):
-    column_list = [Person.id, Person.name_en, Person.name_kn, Person.gender, Person.parent_id]
-    form_columns = [Person.name_en, Person.name_kn, Person.gender, Person.parent_id]
-    column_searchable_list = [Person.name_en, Person.name_kn]
-    column_sortable_list = [Person.name_en, Person.name_kn, Person.id]
-    column_labels = {
-        Person.name_en: "English Name",
-        Person.name_kn: "Kannada Name",
-    }
-
-admin.add_view(PersonAdmin)
-
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+PERSON_CACHE_SECONDS = int(os.getenv("PERSON_CACHE_SECONDS", "60"))
+_person_cache = {"expires_at": 0, "persons": None}
+
+def get_cached_persons(db):
+    now = time.monotonic()
+    if _person_cache["persons"] is not None and _person_cache["expires_at"] > now:
+        return _person_cache["persons"]
+
+    persons = db.query(Person).order_by(Person.name_kn).all()
+    _person_cache["persons"] = persons
+    _person_cache["expires_at"] = now + PERSON_CACHE_SECONDS
+    return persons
+
+def clear_person_cache():
+    _person_cache["expires_at"] = 0
+    _person_cache["persons"] = None
+
+def admin_required(request: Request):
+    if not request.session.get("admin_logged_in"):
+        return RedirectResponse("/admin/login", status_code=303)
+    return None
+
+def person_option_label(person):
+    names = [name for name in (person.name_en, person.name_kn) if name]
+    return " / ".join(names) or f"Person #{person.id}"
+
+def parse_optional_int(value):
+    return int(value) if value else None
+
+def parse_optional_date(value):
+    if not value:
+        return None
+    return datetime.strptime(value, "%Y-%m-%d").date()
+
+def person_form_payload(name_en, name_kn, gender, parent_id, parent2_id, date_of_birth):
+    return {
+        "name_en": name_en.strip() if name_en else None,
+        "name_kn": name_kn.strip() if name_kn else None,
+        "gender": gender or None,
+        "parent_id": parse_optional_int(parent_id),
+        "parent2_id": parse_optional_int(parent2_id),
+        "date_of_birth": parse_optional_date(date_of_birth),
+    }
+
+def assign_person_form(person, payload):
+    person.name_en = payload["name_en"]
+    person.name_kn = payload["name_kn"]
+    person.gender = payload["gender"]
+    person.parent_id = payload["parent_id"]
+    person.parent2_id = payload["parent2_id"]
+    person.date_of_birth = payload["date_of_birth"]
+
+def admin_people(db):
+    people = db.query(Person).order_by(Person.name_en, Person.name_kn, Person.id).all()
+    people_by_id = {person.id: person for person in people}
+    return [
+        {
+            "id": person.id,
+            "name_en": person.name_en,
+            "name_kn": person.name_kn,
+            "gender": person.gender,
+            "date_of_birth": person.date_of_birth,
+            "parent": person_option_label(parent) if (parent := people_by_id.get(person.parent_id)) else None,
+            "parent2": person_option_label(parent) if (parent := people_by_id.get(person.parent2_id)) else None,
+        }
+        for person in people
+    ]
+
+def admin_parent_options(db, exclude_person_id=None):
+    query = db.query(Person)
+    if exclude_person_id is not None:
+        query = query.filter(Person.id != exclude_person_id)
+    return query.order_by(Person.name_en, Person.name_kn, Person.id).all()
+
+@app.get("/admin/login", response_class=HTMLResponse)
+async def admin_login(request: Request):
+    if request.session.get("admin_logged_in"):
+        return RedirectResponse("/admin", status_code=303)
+    return templates.TemplateResponse("admin_login.html", {"request": request, "error": None})
+
+@app.post("/admin/login")
+async def admin_login_post(
+    request: Request,
+    password: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    credential = db.query(AdminCredential).first()
+    if credential and password == credential.password:
+        request.session["admin_logged_in"] = True
+        return RedirectResponse("/admin", status_code=303)
+
+    return templates.TemplateResponse(
+        "admin_login.html",
+        {"request": request, "error": "Invalid admin password."},
+        status_code=401,
+    )
+
+@app.post("/admin/logout")
+async def admin_logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/admin/login", status_code=303)
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
+    redirect = admin_required(request)
+    if redirect:
+        return redirect
+    return templates.TemplateResponse(
+        "admin_dashboard.html",
+        {"request": request, "people": admin_people(db), "parents": admin_parent_options(db)},
+    )
+
+@app.get("/admin/users/new", response_class=HTMLResponse)
+async def admin_new_user(request: Request, db: Session = Depends(get_db)):
+    redirect = admin_required(request)
+    if redirect:
+        return redirect
+
+    return templates.TemplateResponse(
+        "admin_person_form.html",
+        {"request": request, "person": None, "parents": admin_parent_options(db), "error": None},
+    )
+
+@app.post("/admin/users/new")
+async def admin_create_user(
+    request: Request,
+    name_en: str = Form(""),
+    name_kn: str = Form(""),
+    gender: str = Form(""),
+    parent_id: str = Form(""),
+    parent2_id: str = Form(""),
+    date_of_birth: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    redirect = admin_required(request)
+    if redirect:
+        return redirect
+
+    try:
+        person = Person()
+        assign_person_form(person, person_form_payload(name_en, name_kn, gender, parent_id, parent2_id, date_of_birth))
+        db.add(person)
+        db.commit()
+        clear_person_cache()
+        return RedirectResponse("/admin", status_code=303)
+    except ValueError:
+        return templates.TemplateResponse(
+            "admin_person_form.html",
+            {"request": request, "person": None, "parents": admin_parent_options(db), "error": "Use a valid date of birth."},
+            status_code=400,
+        )
+
+@app.get("/admin/users/{person_id}/edit", response_class=HTMLResponse)
+async def admin_edit_user(request: Request, person_id: int, db: Session = Depends(get_db)):
+    redirect = admin_required(request)
+    if redirect:
+        return redirect
+
+    person = db.query(Person).filter(Person.id == person_id).first()
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    return templates.TemplateResponse(
+        "admin_person_form.html",
+        {"request": request, "person": person, "parents": admin_parent_options(db, person_id), "error": None},
+    )
+
+@app.post("/admin/users/{person_id}/edit")
+async def admin_update_user(
+    request: Request,
+    person_id: int,
+    name_en: str = Form(""),
+    name_kn: str = Form(""),
+    gender: str = Form(""),
+    parent_id: str = Form(""),
+    parent2_id: str = Form(""),
+    date_of_birth: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    redirect = admin_required(request)
+    if redirect:
+        return redirect
+
+    person = db.query(Person).filter(Person.id == person_id).first()
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    try:
+        assign_person_form(person, person_form_payload(name_en, name_kn, gender, parent_id, parent2_id, date_of_birth))
+        db.commit()
+        clear_person_cache()
+        return RedirectResponse("/admin", status_code=303)
+    except ValueError:
+        return templates.TemplateResponse(
+            "admin_person_form.html",
+            {"request": request, "person": person, "parents": admin_parent_options(db, person_id), "error": "Use a valid date of birth."},
+            status_code=400,
+        )
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, db: Session = Depends(get_db)):
-    persons = db.query(Person).order_by(Person.name_kn).all()
+    persons = get_cached_persons(db)
     return templates.TemplateResponse(
         "home.html",
         {"request": request, "stats": family_stats(persons)},
@@ -71,7 +231,7 @@ async def read_root(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/tree", response_class=HTMLResponse)
 async def tree_view(request: Request, db: Session = Depends(get_db)):
-    persons = db.query(Person).order_by(Person.name_kn).all()
+    persons = get_cached_persons(db)
     levels = get_generation_levels(persons)
     nodes = [
         {
@@ -89,13 +249,15 @@ async def tree_view(request: Request, db: Session = Depends(get_db)):
 @app.get("/profile", response_class=HTMLResponse)
 @app.get("/lineage", response_class=HTMLResponse)
 async def profile_view(request: Request, db: Session = Depends(get_db)):
-    persons = db.query(Person).order_by(Person.name_kn).all()
+    persons = get_cached_persons(db)
     return templates.TemplateResponse("lineage.html", {"request": request, "persons": persons})
 
 @app.get("/api/profile/{person_id}")
 @app.get("/api/lineage/{person_id}")
 async def get_lineage(person_id: int, db: Session = Depends(get_db)):
-    person = db.query(Person).filter(Person.id == person_id).first()
+    persons = get_cached_persons(db)
+    people_by_id = people_by_id_map(persons)
+    person = people_by_id.get(person_id)
     if not person:
         return {
             "error": "Person not found.",
@@ -103,32 +265,41 @@ async def get_lineage(person_id: int, db: Session = Depends(get_db)):
             "relationship_kn": "ವ್ಯಕ್ತಿ ಕಂಡುಬಂದಿಲ್ಲ.",
         }
 
-    persons = db.query(Person).order_by(Person.name_kn).all()
     levels = get_generation_levels(persons)
-    ancestors = []
-    current = person
-    while current:
-        ancestors.append(person_payload(current, selected=current.id == person.id))
-        current = db.query(Person).filter(Person.id == current.parent_id).first() if current.parent_id else None
-
-    ancestors.reverse()
-    tree = person_tree(person, db, selected_id=person.id)
+    children_by_parent = children_by_parent_map(persons)
+    ancestors = ancestor_payloads_from_map(person, people_by_id)
+    tree = person_tree_from_map(person, children_by_parent, selected_id=person.id)
     return {
         "selected_id": person.id,
-        "profile": profile_payload(person, db, persons, levels, ancestors, tree),
+        "profile": profile_payload(person, persons, levels, ancestors, tree, people_by_id, children_by_parent),
         "path": ancestors,
         "tree": tree,
     }
 
+def ancestor_payloads_from_map(person, people_by_id):
+    ancestors = []
+    seen = set()
+    current = person
+
+    while current and current.id not in seen:
+        seen.add(current.id)
+        ancestors.append(person_payload(current, selected=current.id == person.id))
+        current = people_by_id.get(current.parent_id) if current.parent_id else None
+
+    ancestors.reverse()
+    return ancestors
+
 @app.get("/relationship", response_class=HTMLResponse)
 async def relationship_view(request: Request, db: Session = Depends(get_db)):
-    persons = db.query(Person).order_by(Person.name_kn).all()
+    persons = get_cached_persons(db)
     return templates.TemplateResponse("relationship.html", {"request": request, "persons": persons})
 
 @app.get("/api/relationship")
 async def get_relationship(p1_id: int, p2_id: int, db: Session = Depends(get_db)):
-    person1 = db.query(Person).filter(Person.id == p1_id).first()
-    person2 = db.query(Person).filter(Person.id == p2_id).first()
+    persons = get_cached_persons(db)
+    people_by_id = people_by_id_map(persons)
+    person1 = people_by_id.get(p1_id)
+    person2 = people_by_id.get(p2_id)
 
     if not person1 or not person2:
         return {
@@ -136,7 +307,7 @@ async def get_relationship(p1_id: int, p2_id: int, db: Session = Depends(get_db)
             "relationship_kn": "ವ್ಯಕ್ತಿ ಕಂಡುಬಂದಿಲ್ಲ.",
         }
 
-    relation_en, relation_kn = describe_relationship(person1, person2, db)
+    relation_en, relation_kn = describe_relationship_from_map(person1, person2, people_by_id)
     relation_label_en = relationship_label(relation_en)
 
     if relation_en == "same person":
@@ -166,6 +337,20 @@ def person_payload(person, selected=False):
         "selected": selected,
     }
 
+def people_by_id_map(persons):
+    return {person.id: person for person in persons}
+
+def children_by_parent_map(persons):
+    children_by_parent = {}
+    for person in persons:
+        if person.parent_id:
+            children_by_parent.setdefault(person.parent_id, []).append(person)
+
+    for children in children_by_parent.values():
+        children.sort(key=lambda person: person.name_kn or person.name_en or "")
+
+    return children_by_parent
+
 def person_tree(person, db, selected_id=None, visited=None):
     visited = visited or set()
     if person.id in visited:
@@ -177,6 +362,19 @@ def person_tree(person, db, selected_id=None, visited=None):
     payload["children"] = [
         person_tree(child, db, selected_id=selected_id, visited=visited.copy())
         for child in children
+    ]
+    return payload
+
+def person_tree_from_map(person, children_by_parent, selected_id=None, visited=None):
+    visited = visited or set()
+    if person.id in visited:
+        return person_payload(person, selected=person.id == selected_id)
+
+    visited.add(person.id)
+    payload = person_payload(person, selected=person.id == selected_id)
+    payload["children"] = [
+        person_tree_from_map(child, children_by_parent, selected_id=selected_id, visited=visited.copy())
+        for child in children_by_parent.get(person.id, [])
     ]
     return payload
 
@@ -195,12 +393,8 @@ def max_descendant_depth(tree):
 
 def family_stats(persons):
     levels = get_generation_levels(persons)
-    children_by_parent = {}
-    people_by_id = {person.id: person for person in persons}
-
-    for person in persons:
-        if person.parent_id:
-            children_by_parent.setdefault(person.parent_id, []).append(person)
+    children_by_parent = children_by_parent_map(persons)
+    people_by_id = people_by_id_map(persons)
 
     generation_counts = {}
     for person in persons:
@@ -253,22 +447,23 @@ def family_stats(persons):
         "names_with_kannada": sum(1 for person in persons if person.name_kn),
     }
 
-def profile_payload(person, db, persons, levels, ancestors, tree):
-    people_by_id = {known_person.id: known_person for known_person in persons}
+def profile_payload(person, persons, levels, ancestors, tree, people_by_id, children_by_parent):
     parent = people_by_id.get(person.parent_id) if person.parent_id else None
-    children = [known_person for known_person in persons if known_person.parent_id == person.id]
-    siblings = []
-    if person.parent_id:
-        siblings = [
-            known_person
-            for known_person in persons
-            if known_person.parent_id == person.parent_id and known_person.id != person.id
-        ]
+    children = children_by_parent.get(person.id, [])
+    siblings = [
+        known_person
+        for known_person in children_by_parent.get(person.parent_id, [])
+        if known_person.id != person.id
+    ] if person.parent_id else []
 
     descendants = flatten_tree(tree)
     relation_counts = {}
     related_people = 0
-    selected_ancestors = ancestor_distances_from_map(person, people_by_id)
+    ancestor_cache = {
+        known_person.id: ancestor_distances_from_map(known_person, people_by_id)
+        for known_person in persons
+    }
+    selected_ancestors = ancestor_cache[person.id]
     for relative in persons:
         if relative.id == person.id:
             continue
@@ -276,7 +471,7 @@ def profile_payload(person, db, persons, levels, ancestors, tree):
         relation_en, _ = describe_relationship_from_distances(
             relative,
             person,
-            ancestor_distances_from_map(relative, people_by_id),
+            ancestor_cache[relative.id],
             selected_ancestors,
         )
         if relation_en == "not directly related":
@@ -310,18 +505,88 @@ def profile_payload(person, db, persons, levels, ancestors, tree):
         "sister_count": sum(1 for sibling in siblings if sibling.gender == "Female"),
         "unknown_gender_sibling_count": sum(1 for sibling in siblings if sibling.gender not in {"Male", "Female"}),
         "known_relation_count": related_people,
-        "relation_summary": [
-            {
-                "relationship": relationship,
-                "label": relationship_label(relationship),
-                "label_kn": relationship_label_kn(relationship),
-                "description": relationship_description(relationship),
-                "description_kn": relationship_description_kn(relationship),
-                "count": count,
-            }
-            for relationship, count in sorted(relation_counts.items(), key=lambda item: (-item[1], item[0]))
-        ],
+        "relation_summary": simple_relation_summary(relation_counts),
     }
+
+def simple_relation_summary(relation_counts):
+    category_counts = {}
+
+    for relationship, count in relation_counts.items():
+        category = simple_relation_category(relationship)
+        category_counts[category] = category_counts.get(category, 0) + count
+
+    return [
+        {
+            "category": category,
+            "count": count,
+            "label": simple_relation_label(category, count, "en"),
+            "label_kn": simple_relation_label(category, count, "kn"),
+        }
+        for category, count in sorted(category_counts.items(), key=lambda item: (-item[1], relation_category_order(item[0])))
+    ]
+
+def simple_relation_category(relationship):
+    if "cousin" in relationship:
+        return "cousins"
+    if "aunt" in relationship or "uncle" in relationship:
+        return "aunts_uncles"
+    if "niece" in relationship or "nephew" in relationship:
+        return "nieces_nephews"
+    if "grandparent" in relationship:
+        return "grandparents"
+    if "grandchild" in relationship or "grandson" in relationship or "granddaughter" in relationship:
+        return "grandchildren"
+    if relationship in {"parent", "father", "mother"}:
+        return "parents"
+    if relationship in {"child", "son", "daughter"}:
+        return "children"
+    if relationship in {"sibling", "brother", "sister"}:
+        return "siblings"
+    return "relatives"
+
+def relation_category_order(category):
+    order = {
+        "cousins": 1,
+        "siblings": 2,
+        "parents": 3,
+        "grandparents": 4,
+        "children": 5,
+        "grandchildren": 6,
+        "aunts_uncles": 7,
+        "nieces_nephews": 8,
+        "relatives": 9,
+    }
+    return order.get(category, 99)
+
+def simple_relation_label(category, count, language):
+    if language == "kn":
+        labels = {
+            "cousins": ("ಸೋದರ ಸಂಬಂಧಿ", "ಸೋದರ ಸಂಬಂಧಿಗಳು"),
+            "siblings": ("ಸಹೋದರ/ಸಹೋದರಿ", "ಸಹೋದರರು/ಸಹೋದರಿಯರು"),
+            "parents": ("ಪೋಷಕ", "ಪೋಷಕರು"),
+            "grandparents": ("ಅಜ್ಜ/ಅಜ್ಜಿ", "ಅಜ್ಜ/ಅಜ್ಜಿಯರು"),
+            "children": ("ಮಗು", "ಮಕ್ಕಳು"),
+            "grandchildren": ("ಮೊಮ್ಮಗು", "ಮೊಮ್ಮಕ್ಕಳು"),
+            "aunts_uncles": ("ಅತ್ತೆ/ಮಾಮ", "ಅತ್ತೆ/ಮಾಮಂದಿರು"),
+            "nieces_nephews": ("ಸೋದರ ಮಗು", "ಸೋದರ ಮಕ್ಕಳು"),
+            "relatives": ("ಸಂಬಂಧಿ", "ಸಂಬಂಧಿಕರು"),
+        }
+        singular, plural = labels.get(category, labels["relatives"])
+        return f"ಇವರಿಗೆ {count} {singular if count == 1 else plural} ಇದ್ದಾರೆ"
+
+    labels = {
+        "cousins": ("cousin", "cousins"),
+        "siblings": ("sibling", "siblings"),
+        "parents": ("parent", "parents"),
+        "grandparents": ("grandparent", "grandparents"),
+        "children": ("child", "children"),
+        "grandchildren": ("grandchild", "grandchildren"),
+        "aunts_uncles": ("aunt/uncle", "aunts/uncles"),
+        "nieces_nephews": ("niece/nephew", "nieces/nephews"),
+        "relatives": ("relative", "relatives"),
+    }
+    singular, plural = labels.get(category, labels["relatives"])
+    return f"Has {count} {singular if count == 1 else plural}"
 
 def ancestor_distances_from_map(person, people_by_id):
     distances = {}
@@ -365,6 +630,16 @@ def ancestor_distances(person, db):
 
     return distances
 
+def describe_relationship_from_map(person1, person2, people_by_id):
+    if person1.id == person2.id:
+        return "same person", "ಅದೇ ವ್ಯಕ್ತಿ"
+
+    ancestors1 = ancestor_distances_from_map(person1, people_by_id)
+    ancestors2 = ancestor_distances_from_map(person2, people_by_id)
+    relation_en, relation_kn = describe_relationship_from_distances(person1, person2, ancestors1, ancestors2)
+    exact_relation_kn = exact_relationship_kn(person1, person2, ancestors1, ancestors2, people_by_id)
+    return relation_en, exact_relation_kn or relation_kn
+
 def gendered(person, male, female, neutral):
     if person.gender == "Male":
         return male
@@ -381,7 +656,7 @@ def ancestor_relation(person, distance):
     prefix = "great-" * (distance - 2)
     return (
         gendered(person, f"{prefix}grandfather", f"{prefix}grandmother", f"{prefix}grandparent"),
-        gendered(person, "ಮುತ್ತಜ್ಜ", "ಮುತ್ತಜ್ಜಿ", "ಹಿರಿಯ ಪೂರ್ವಜರು"),
+        ancestor_relation_kn(person, distance),
     )
 
 def descendant_relation(person, distance):
@@ -393,8 +668,123 @@ def descendant_relation(person, distance):
     prefix = "great-" * (distance - 2)
     return (
         gendered(person, f"{prefix}grandson", f"{prefix}granddaughter", f"{prefix}grandchild"),
-        gendered(person, "ಮರಿಮೊಮ್ಮಗ", "ಮರಿಮೊಮ್ಮಗಳು", "ಮುಂದಿನ ವಂಶಜರು"),
+        descendant_relation_kn(person, distance),
     )
+
+def ancestor_relation_kn(person, distance):
+    if distance == 1:
+        return gendered(person, "ತಂದೆ", "ತಾಯಿ", "ಪೋಷಕರು")
+    if distance == 2:
+        return gendered(person, "ಅಜ್ಜ", "ಅಜ್ಜಿ", "ಅಜ್ಜ/ಅಜ್ಜಿ")
+
+    prefix = " ".join(["ಮುತ್ತ"] * (distance - 2))
+    return gendered(person, f"{prefix}ಜ್ಜ", f"{prefix}ಜ್ಜಿ", f"{prefix} ಅಜ್ಜ/ಅಜ್ಜಿ")
+
+def descendant_relation_kn(person, distance):
+    if distance == 1:
+        return gendered(person, "ಮಗ", "ಮಗಳು", "ಮಗು")
+    if distance == 2:
+        return gendered(person, "ಮೊಮ್ಮಗ", "ಮೊಮ್ಮಗಳು", "ಮೊಮ್ಮಗು")
+
+    prefix = " ".join(["ಮರಿ"] * (distance - 2))
+    return gendered(person, f"{prefix} ಮೊಮ್ಮಗ", f"{prefix} ಮೊಮ್ಮಗಳು", f"{prefix} ಮೊಮ್ಮಗು")
+
+def ordinal_kn(value):
+    names = {
+        1: "ಮೊದಲ",
+        2: "ಎರಡನೇ",
+        3: "ಮೂರನೇ",
+        4: "ನಾಲ್ಕನೇ",
+        5: "ಐದನೇ",
+        6: "ಆರನೇ",
+        7: "ಏಳನೇ",
+        8: "ಎಂಟನೇ",
+        9: "ಒಂಬತ್ತನೇ",
+        10: "ಹತ್ತನೇ",
+    }
+    return names.get(value, f"{value}ನೇ")
+
+def parent_possessive_kn(person):
+    return gendered(person, "ತಂದೆಯ", "ತಾಯಿಯ", "ಪೋಷಕರ")
+
+def sibling_label_kn(person, possessive=False):
+    if possessive:
+        return gendered(person, "ಸಹೋದರನ", "ಸಹೋದರಿಯ", "ಸಹೋದರ/ಸಹೋದರಿಯ")
+    return gendered(person, "ಸಹೋದರ", "ಸಹೋದರಿ", "ಸಹೋದರ/ಸಹೋದರಿ")
+
+def child_label_kn(person, possessive=False):
+    if possessive:
+        return gendered(person, "ಮಗನ", "ಮಗಳ", "ಮಗುವಿನ")
+    return gendered(person, "ಮಗ", "ಮಗಳು", "ಮಗು")
+
+def ancestor_path_to_id(person, ancestor_id, people_by_id):
+    path = []
+    current = person
+    seen = set()
+
+    while current and current.id not in seen:
+        path.append(current)
+        if current.id == ancestor_id:
+            return path
+        seen.add(current.id)
+        current = people_by_id.get(current.parent_id) if current.parent_id else None
+
+    return []
+
+def path_relationship_kn(person1, person2, lca_id, people_by_id):
+    path1_up = ancestor_path_to_id(person1, lca_id, people_by_id)
+    path2_up = ancestor_path_to_id(person2, lca_id, people_by_id)
+    if len(path1_up) < 2 or len(path2_up) < 2:
+        return ""
+
+    path1_down = list(reversed(path1_up))
+    branch1_child = path1_down[1]
+    branch2_chain = list(reversed(path2_up))[1:]
+    labels = [parent_possessive_kn(person) for person in reversed(branch2_chain)]
+
+    remaining_descendants = path1_down[2:]
+    labels.append(sibling_label_kn(branch1_child, possessive=bool(remaining_descendants)))
+
+    for index, descendant in enumerate(remaining_descendants):
+        labels.append(child_label_kn(descendant, possessive=index < len(remaining_descendants) - 1))
+
+    return " ".join(labels)
+
+def cousin_label_kn(distance1, distance2, path_label):
+    degree = min(distance1, distance2) - 1
+    removed = abs(distance1 - distance2)
+    label = f"{ordinal_kn(degree)} ಹಂತದ ಸೋದರ ಸಂಬಂಧಿ"
+    if removed:
+        label = f"{label}, {removed} ತಲೆಮಾರಿನ ಅಂತರ"
+    return f"{label} ({path_label})" if path_label else label
+
+def exact_relationship_kn(person1, person2, ancestors1, ancestors2, people_by_id):
+    if person1.id == person2.id:
+        return "ಅದೇ ವ್ಯಕ್ತಿ"
+
+    if person1.id in ancestors2:
+        return ancestor_relation_kn(person1, ancestors2[person1.id])
+
+    if person2.id in ancestors1:
+        return descendant_relation_kn(person1, ancestors1[person2.id])
+
+    common_ids = set(ancestors1).intersection(ancestors2)
+    if not common_ids:
+        return "ನೇರ ಸಂಬಂಧ ಇಲ್ಲ"
+
+    lca_id = min(common_ids, key=lambda person_id: ancestors1[person_id] + ancestors2[person_id])
+    distance1 = ancestors1[lca_id]
+    distance2 = ancestors2[lca_id]
+
+    if distance1 == 1 and distance2 == 1:
+        return gendered(person1, "ಸಹೋದರ", "ಸಹೋದರಿ", "ಸಹೋದರ/ಸಹೋದರಿ")
+
+    if distance1 >= 2 and distance2 >= 2:
+        path_label = path_relationship_kn(person1, person2, lca_id, people_by_id)
+        return cousin_label_kn(distance1, distance2, path_label)
+
+    path_label = path_relationship_kn(person1, person2, lca_id, people_by_id)
+    return path_label
 
 def ordinal(value):
     names = {
@@ -516,11 +906,11 @@ def relationship_label_kn(relationship):
         if "grandparent" in relationship:
             return "ಹಿರಿಯ ಪೂರ್ವಜರು"
         if "grandson" in relationship:
-            return "ಮುಂದಿನ ವಂಶಜ"
+            return "ಮರಿ ಮೊಮ್ಮಗ"
         if "granddaughter" in relationship:
-            return "ಮುಂದಿನ ವಂಶಜೆ"
+            return "ಮರಿ ಮೊಮ್ಮಗಳು"
         if "grandchild" in relationship:
-            return "ಮುಂದಿನ ವಂಶಜರು"
+            return "ಮರಿ ಮೊಮ್ಮಗು"
         if "uncle" in relationship or "aunt" in relationship:
             return "ಹಿರಿಯ ಅತ್ತೆ/ಮಾಮ"
         if "nephew" in relationship or "niece" in relationship:

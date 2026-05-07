@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card">
+<div class="card search-card">
     <h2 data-i18n="nav_profile">ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಪಡೆಯಿರಿ</h2>
     <p class="mb-4 text-secondary" data-i18n="profile_intro">ಅವರ ಪ್ರೊಫೈಲ್ ನೋಡಲು ವ್ಯಕ್ತಿಯನ್ನು ಆಯ್ಕೆಮಾಡಿ.</p>
     
     <div class="flex gap-4 items-center">
-        <select id="person-select">
+        <select id="person-select" class="js-person-search-select">
             <option value="" data-i18n="select_person">-- ವ್ಯಕ್ತಿಯನ್ನು ಆಯ್ಕೆಮಾಡಿ --</option>
             {% for p in persons %}
                 <option value="{{ p.id }}" data-name-en="{{ p.name_en }}" data-name-kn="{{ p.name_kn }}">{{ p.name_kn }}</option>
             {% endfor %}
         </select>
-        <button onclick="fetchLineage()" data-i18n="get_profile">ಪ್ರೊಫೈಲ್ ಪಡೆಯಿರಿ</button>
+        <button id="profile-submit" onclick="fetchLineage()" data-i18n="get_profile">ಪ್ರೊಫೈಲ್ ಪಡೆಯಿರಿ</button>
     </div>
     
     <div id="result" class="lineage-container"></div>
@@ -24,23 +24,46 @@
     async function fetchLineage() {
         const id = document.getElementById('person-select').value;
         if (!id) return;
-        
-        const res = await fetch(`/api/profile/${id}`);
-        const data = await res.json();
-        
+
         const container = document.getElementById('result');
         container.innerHTML = '';
-        
-        if (data.error) {
-            const error = document.createElement('p');
-            error.style.color = '#ef4444';
-            error.textContent = relationshipForLanguage(data) || t('person_not_found');
-            container.appendChild(error);
-            return;
-        }
+        currentLineage = null;
+        showProfileLoader(container);
+        setProfileLoading(true);
 
-        currentLineage = data;
-        renderLineage();
+        try {
+            const res = await fetch(`/api/profile/${id}`);
+            const data = await res.json();
+
+            container.innerHTML = '';
+        
+            if (data.error) {
+                const error = document.createElement('p');
+                error.style.color = '#ef4444';
+                error.textContent = relationshipForLanguage(data) || t('person_not_found');
+                container.appendChild(error);
+                return;
+            }
+
+            currentLineage = data;
+            renderLineage();
+        } finally {
+            setProfileLoading(false);
+        }
+    }
+
+    function setProfileLoading(isLoading) {
+        const button = document.getElementById('profile-submit');
+        const select = document.getElementById('person-select');
+        if (button) button.disabled = isLoading;
+        if (select) {
+            select.disabled = isLoading;
+            setSearchableSelectDisabled(select, isLoading);
+        }
+    }
+
+    function showProfileLoader(container) {
+        container.appendChild(createLoadingPanel('profile', t('loading_profile')));
     }
 
     function renderLineage() {
@@ -224,11 +247,6 @@
         heading.textContent = t('relation_breakdown');
         panel.appendChild(heading);
 
-        const note = document.createElement('p');
-        note.className = 'relation-note';
-        note.textContent = t('relation_note');
-        panel.appendChild(note);
-
         if (!summary?.length) {
             const empty = document.createElement('p');
             empty.className = 'text-secondary';
@@ -237,27 +255,90 @@
             return panel;
         }
 
-        const list = document.createElement('dl');
-        list.className = 'relation-summary';
-        summary.forEach((item) => {
-            const term = document.createElement('dt');
-            term.textContent = getLanguage() === 'en'
-                ? (item.label || item.relationship)
-                : (item.label_kn || item.relationship_kn || item.relationship);
-            const detail = document.createElement('dd');
-            const count = document.createElement('strong');
-            count.textContent = item.count;
-            detail.appendChild(count);
-            const descriptionText = getLanguage() === 'en' ? item.description : item.description_kn;
-            if (descriptionText) {
-                const description = document.createElement('span');
-                description.textContent = descriptionText;
-                detail.appendChild(description);
-            }
-            list.append(term, detail);
+        const simpleSummary = normalizeRelationSummary(summary);
+        const list = document.createElement('div');
+        list.className = 'simple-relation-list';
+        simpleSummary.forEach((item) => {
+            const row = document.createElement('p');
+            row.className = 'simple-relation-item';
+            row.textContent = getLanguage() === 'en'
+                ? simpleRelationLabel(item.category, item.count, 'en')
+                : simpleRelationLabel(item.category, item.count, 'kn');
+            list.appendChild(row);
         });
         panel.appendChild(list);
         return panel;
+    }
+
+    function normalizeRelationSummary(summary) {
+        const counts = {};
+        summary.forEach((item) => {
+            const category = item.category || simpleRelationCategory(item.relationship || item.label || item.label_kn || '');
+            counts[category] = (counts[category] || 0) + Number(item.count || 0);
+        });
+
+        return Object.entries(counts)
+            .map(([category, count]) => ({ category, count }))
+            .sort((first, second) => second.count - first.count || relationCategoryOrder(first.category) - relationCategoryOrder(second.category));
+    }
+
+    function simpleRelationCategory(value) {
+        const relationship = String(value).toLowerCase();
+        if (relationship.includes('cousin') || relationship.includes('ಸೋದರ ಸಂಬಂಧಿ')) return 'cousins';
+        if (relationship.includes('aunt') || relationship.includes('uncle') || relationship.includes('ಅತ್ತೆ') || relationship.includes('ಮಾಮ')) return 'aunts_uncles';
+        if (relationship.includes('niece') || relationship.includes('nephew') || relationship.includes('ಸೋದರ ಮಗು')) return 'nieces_nephews';
+        if (relationship.includes('grandparent') || relationship.includes('grandfather') || relationship.includes('grandmother') || relationship.includes('ಅಜ್ಜ') || relationship.includes('ಅಜ್ಜಿ') || relationship.includes('ಪೂರ್ವಜ')) return 'grandparents';
+        if (relationship.includes('grandchild') || relationship.includes('grandson') || relationship.includes('granddaughter') || relationship.includes('ಮೊಮ್ಮ')) return 'grandchildren';
+        if (['parent', 'father', 'mother'].includes(relationship) || relationship.includes('ಪೋಷ')) return 'parents';
+        if (['child', 'son', 'daughter'].includes(relationship) || relationship.includes('ಮಗು') || relationship.includes('ಮಕ್ಕ')) return 'children';
+        if (['sibling', 'brother', 'sister'].includes(relationship) || relationship.includes('ಸಹೋದರ')) return 'siblings';
+        return 'relatives';
+    }
+
+    function relationCategoryOrder(category) {
+        return {
+            cousins: 1,
+            siblings: 2,
+            parents: 3,
+            grandparents: 4,
+            children: 5,
+            grandchildren: 6,
+            aunts_uncles: 7,
+            nieces_nephews: 8,
+            relatives: 9
+        }[category] || 99;
+    }
+
+    function simpleRelationLabel(category, count, language) {
+        if (language === 'kn') {
+            const labels = {
+                cousins: ['ಸೋದರ ಸಂಬಂಧಿ', 'ಸೋದರ ಸಂಬಂಧಿಗಳು'],
+                siblings: ['ಸಹೋದರ/ಸಹೋದರಿ', 'ಸಹೋದರರು/ಸಹೋದರಿಯರು'],
+                parents: ['ಪೋಷಕ', 'ಪೋಷಕರು'],
+                grandparents: ['ಅಜ್ಜ/ಅಜ್ಜಿ', 'ಅಜ್ಜ/ಅಜ್ಜಿಯರು'],
+                children: ['ಮಗು', 'ಮಕ್ಕಳು'],
+                grandchildren: ['ಮೊಮ್ಮಗು', 'ಮೊಮ್ಮಕ್ಕಳು'],
+                aunts_uncles: ['ಅತ್ತೆ/ಮಾಮ', 'ಅತ್ತೆ/ಮಾಮಂದಿರು'],
+                nieces_nephews: ['ಸೋದರ ಮಗು', 'ಸೋದರ ಮಕ್ಕಳು'],
+                relatives: ['ಸಂಬಂಧಿ', 'ಸಂಬಂಧಿಕರು']
+            };
+            const [singular, plural] = labels[category] || labels.relatives;
+            return `ಇವರಿಗೆ ${count} ${count === 1 ? singular : plural} ಇದ್ದಾರೆ`;
+        }
+
+        const labels = {
+            cousins: ['cousin', 'cousins'],
+            siblings: ['sibling', 'siblings'],
+            parents: ['parent', 'parents'],
+            grandparents: ['grandparent', 'grandparents'],
+            children: ['child', 'children'],
+            grandchildren: ['grandchild', 'grandchildren'],
+            aunts_uncles: ['aunt/uncle', 'aunts/uncles'],
+            nieces_nephews: ['niece/nephew', 'nieces/nephews'],
+            relatives: ['relative', 'relatives']
+        };
+        const [singular, plural] = labels[category] || labels.relatives;
+        return `Has ${count} ${count === 1 ? singular : plural}`;
     }
 
     function renderChildren(children) {

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ಕಾರ್ಕೇರ ಕುಟುಂಬ</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/styles.css?v=20260528-admin3">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script>
         const LANGUAGE_KEY = 'karkera-family-language';
@@ -72,14 +72,19 @@
                 ancestors: 'Ancestors',
                 siblings: 'Siblings',
                 children: 'Children',
-                relation_breakdown: 'Relation Breakdown',
-                relation_note: 'Generation apart means one person is above or below the other in the family tree.',
+                relation_breakdown: 'Relationship Summary',
                 no_other_relations: 'No other relations found',
                 relationship_intro: 'Select two people to find their relationship.',
                 person_1: '-- Person 1 --',
                 person_2: '-- Person 2 --',
                 and: 'and',
-                find: 'Find'
+                find: 'Find',
+                search_person: 'Search person',
+                no_people_found: 'No people found',
+                loading_profile: 'Building profile...',
+                loading_relationship: 'Finding relationship...',
+                open_menu: 'Open menu',
+                close_menu: 'Close menu'
             },
             kn: {
                 site_title: 'ಕಾರ್ಕೇರ ಕುಟುಂಬ',
@@ -144,14 +149,19 @@
                 ancestors: 'ಪೂರ್ವಜರು',
                 siblings: 'ಸಹೋದರರು/ಸಹೋದರಿಯರು',
                 children: 'ಮಕ್ಕಳು',
-                relation_breakdown: 'ಸಂಬಂಧ ವಿವರ',
-                relation_note: 'ತಲೆಮಾರುಗಳ ಅಂತರ ಎಂದರೆ ಒಬ್ಬರು ಕುಟುಂಬ ವೃಕ್ಷದಲ್ಲಿ ಮತ್ತೊಬ್ಬರಿಗಿಂತ ಮೇಲೆ ಅಥವಾ ಕೆಳಗೆ ಇರುವುದು.',
+                relation_breakdown: 'ಸಂಬಂಧಗಳ ಸಾರಾಂಶ',
                 no_other_relations: 'ಇತರೆ ಸಂಬಂಧಗಳು ಕಂಡುಬಂದಿಲ್ಲ',
                 relationship_intro: 'ಅವರ ಸಂಬಂಧ ತಿಳಿಯಲು ಇಬ್ಬರನ್ನು ಆಯ್ಕೆಮಾಡಿ.',
                 person_1: '-- ವ್ಯಕ್ತಿ 1 --',
                 person_2: '-- ವ್ಯಕ್ತಿ 2 --',
                 and: 'ಮತ್ತು',
-                find: 'ಹುಡುಕಿ'
+                find: 'ಹುಡುಕಿ',
+                search_person: 'ವ್ಯಕ್ತಿಯನ್ನು ಹುಡುಕಿ',
+                no_people_found: 'ಯಾರೂ ಕಂಡುಬಂದಿಲ್ಲ',
+                loading_profile: 'ಪ್ರೊಫೈಲ್ ಸಿದ್ಧವಾಗುತ್ತಿದೆ...',
+                loading_relationship: 'ಸಂಬಂಧ ಹುಡುಕಲಾಗುತ್ತಿದೆ...',
+                open_menu: 'ಮೆನು ತೆರೆಯಿರಿ',
+                close_menu: 'ಮೆನು ಮುಚ್ಚಿರಿ'
             }
         };
 
@@ -192,6 +202,183 @@
             return t('unknown_gender');
         }
 
+        function createProfileIcon(className = '') {
+            const icon = document.createElement('span');
+            icon.className = `loader-profile-icon ${className}`.trim();
+            icon.setAttribute('aria-hidden', 'true');
+            icon.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="4"></circle>
+                    <path d="M4 21a8 8 0 0 1 16 0"></path>
+                </svg>
+            `;
+            return icon;
+        }
+
+        function createLoadingPanel(type, label) {
+            const panel = document.createElement('div');
+            panel.className = `loading-panel ${type === 'relationship' ? 'relationship-loading' : 'profile-loading'}`;
+            panel.setAttribute('role', 'status');
+            panel.setAttribute('aria-live', 'polite');
+
+            const animation = document.createElement('div');
+            animation.className = 'loader-animation';
+
+            if (type === 'relationship') {
+                animation.append(
+                    createProfileIcon('loader-profile-left'),
+                    createProfileIcon('loader-profile-right')
+                );
+            } else {
+                animation.appendChild(createProfileIcon('loader-profile-single'));
+            }
+
+            const text = document.createElement('span');
+            text.className = 'loading-text';
+            text.textContent = label;
+
+            panel.append(animation, text);
+            return panel;
+        }
+
+        function normalizeSearchText(value) {
+            return String(value || '').toLocaleLowerCase().trim();
+        }
+
+        function optionSearchText(option) {
+            return [option.textContent, option.dataset.nameEn, option.dataset.nameKn]
+                .filter(Boolean)
+                .join(' ');
+        }
+
+        function enhancePersonSelect(select) {
+            if (!select || select.dataset.searchableReady === 'true') return;
+
+            select.dataset.searchableReady = 'true';
+            select.classList.add('native-searchable-select');
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'searchable-select';
+
+            const input = document.createElement('input');
+            input.type = 'search';
+            input.className = 'searchable-select-input';
+            input.autocomplete = 'off';
+            input.placeholder = t('search_person');
+            input.setAttribute('aria-label', t('search_person'));
+            input.setAttribute('aria-expanded', 'false');
+
+            const list = document.createElement('div');
+            list.className = 'searchable-select-list';
+            list.setAttribute('role', 'listbox');
+
+            select.parentNode.insertBefore(wrapper, select);
+            wrapper.append(select, input, list);
+
+            function options() {
+                return Array.from(select.options).filter((option) => option.value);
+            }
+
+            function selectedOption() {
+                return select.selectedOptions[0]?.value ? select.selectedOptions[0] : null;
+            }
+
+            function setOpen(isOpen) {
+                wrapper.classList.toggle('is-open', isOpen);
+                input.setAttribute('aria-expanded', String(isOpen));
+            }
+
+            function choose(option) {
+                select.value = option.value;
+                input.value = nameForLanguage(option.dataset);
+                setOpen(false);
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            function renderList(query = input.value) {
+                const search = normalizeSearchText(query);
+                const matches = options()
+                    .filter((option) => !search || normalizeSearchText(optionSearchText(option)).includes(search))
+                    .sort((a, b) => {
+                        const aText = normalizeSearchText(optionSearchText(a));
+                        const bText = normalizeSearchText(optionSearchText(b));
+                        const aStarts = aText.startsWith(search) ? 0 : 1;
+                        const bStarts = bText.startsWith(search) ? 0 : 1;
+                        return aStarts - bStarts || nameForLanguage(a.dataset).localeCompare(nameForLanguage(b.dataset));
+                    });
+
+                list.innerHTML = '';
+
+                if (!matches.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'searchable-select-empty';
+                    empty.textContent = t('no_people_found');
+                    list.appendChild(empty);
+                    return;
+                }
+
+                matches.forEach((option) => {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'searchable-select-option';
+                    item.setAttribute('role', 'option');
+                    item.textContent = nameForLanguage(option.dataset);
+                    item.addEventListener('mousedown', (event) => event.preventDefault());
+                    item.addEventListener('click', () => choose(option));
+                    list.appendChild(item);
+                });
+            }
+
+            input.addEventListener('focus', () => {
+                renderList();
+                setOpen(true);
+            });
+
+            input.addEventListener('input', () => {
+                select.value = '';
+                renderList();
+                setOpen(true);
+            });
+
+            input.addEventListener('keydown', (event) => {
+                const firstOption = list.querySelector('.searchable-select-option');
+                if (event.key === 'Enter' && firstOption) {
+                    event.preventDefault();
+                    firstOption.click();
+                }
+                if (event.key === 'Escape') {
+                    setOpen(false);
+                }
+            });
+
+            input.addEventListener('blur', () => {
+                window.setTimeout(() => {
+                    const option = selectedOption();
+                    input.value = option ? nameForLanguage(option.dataset) : '';
+                    setOpen(false);
+                }, 120);
+            });
+
+            select.addEventListener('change', () => {
+                const option = selectedOption();
+                input.value = option ? nameForLanguage(option.dataset) : '';
+            });
+
+            window.addEventListener('languagechange', () => {
+                input.placeholder = t('search_person');
+                input.setAttribute('aria-label', t('search_person'));
+                const option = selectedOption();
+                input.value = option ? nameForLanguage(option.dataset) : input.value;
+                if (wrapper.classList.contains('is-open')) renderList();
+            });
+        }
+
+        function setSearchableSelectDisabled(select, isDisabled) {
+            const wrapper = select?.closest('.searchable-select');
+            const input = wrapper?.querySelector('.searchable-select-input');
+            if (input) input.disabled = isDisabled;
+        }
+
         function applyLanguage() {
             const language = getLanguage();
             document.documentElement.lang = language === 'en' ? 'en' : 'kn';
@@ -215,7 +402,27 @@
                 toggle.setAttribute('aria-label', t('toggle_aria'));
             }
 
+            const menuToggle = document.getElementById('menu-toggle');
+            if (menuToggle) {
+                const isOpen = document.body.classList.contains('nav-open');
+                menuToggle.setAttribute('aria-label', t(isOpen ? 'close_menu' : 'open_menu'));
+            }
+
             window.dispatchEvent(new CustomEvent('languagechange', { detail: { language } }));
+        }
+
+        function setMenuOpen(isOpen) {
+            document.body.classList.toggle('nav-open', isOpen);
+
+            const menuToggle = document.getElementById('menu-toggle');
+            const drawer = document.getElementById('site-menu');
+            if (menuToggle) {
+                menuToggle.setAttribute('aria-expanded', String(isOpen));
+                menuToggle.setAttribute('aria-label', t(isOpen ? 'close_menu' : 'open_menu'));
+            }
+            if (drawer) {
+                drawer.setAttribute('aria-hidden', String(!isOpen));
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -224,6 +431,31 @@
                 applyLanguage();
             });
 
+            document.getElementById('menu-toggle')?.addEventListener('click', () => {
+                setMenuOpen(!document.body.classList.contains('nav-open'));
+            });
+
+            document.getElementById('menu-backdrop')?.addEventListener('click', () => {
+                setMenuOpen(false);
+            });
+
+            document.querySelectorAll('#site-menu a').forEach((link) => {
+                link.addEventListener('click', () => setMenuOpen(false));
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    setMenuOpen(false);
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                if (window.matchMedia('(min-width: 721px)').matches) {
+                    setMenuOpen(false);
+                }
+            });
+
+            document.querySelectorAll('.js-person-search-select').forEach(enhancePersonSelect);
             applyLanguage();
         });
     </script>
@@ -232,17 +464,37 @@
 <body>
     <nav>
         <a href="/" class="logo">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+            <svg class="brand-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10.5 9-7 9 7"></path><path d="M5 10v10h14V10"></path><path d="M9 20v-6h6v6"></path></svg>
             <span data-i18n="site_title">ಕಾರ್ಕೇರ ಕುಟುಂಬ</span>
         </a>
+        <div class="desktop-links">
+            <a href="/" data-i18n="nav_home">ಮುಖಪುಟ</a>
+            <a href="/tree" data-i18n="nav_tree">ವಂಶವೃಕ್ಷ</a>
+            <a href="/profile" data-i18n="nav_profile">ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಪಡೆಯಿರಿ</a>
+            <a href="/relationship" data-i18n="nav_relationship">ಸಂಬಂಧ ಹುಡುಕಿ</a>
+        </div>
+        <div class="nav-actions">
+            <button type="button" id="language-toggle" class="language-toggle" aria-label="ಇಂಗ್ಲಿಷ್‌ಗೆ ಬದಲಿಸಿ">ಕನ್ನಡ</button>
+            <button type="button" id="menu-toggle" class="menu-toggle" aria-controls="site-menu" aria-expanded="false" aria-label="ಮೆನು ತೆರೆಯಿರಿ">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+    <div id="menu-backdrop" class="menu-backdrop" aria-hidden="true"></div>
+    <aside id="site-menu" class="site-menu" aria-hidden="true">
+        <div class="menu-header">
+            <span data-i18n="site_title">ಕಾರ್ಕೇರ ಕುಟುಂಬ</span>
+            <button type="button" class="menu-close" onclick="setMenuOpen(false)" data-i18n-aria-label="close_menu" aria-label="ಮೆನು ಮುಚ್ಚಿರಿ">×</button>
+        </div>
         <div class="links">
             <a href="/" data-i18n="nav_home">ಮುಖಪುಟ</a>
             <a href="/tree" data-i18n="nav_tree">ವಂಶವೃಕ್ಷ</a>
             <a href="/profile" data-i18n="nav_profile">ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಪಡೆಯಿರಿ</a>
             <a href="/relationship" data-i18n="nav_relationship">ಸಂಬಂಧ ಹುಡುಕಿ</a>
-            <button type="button" id="language-toggle" class="language-toggle" aria-label="ಇಂಗ್ಲಿಷ್‌ಗೆ ಬದಲಿಸಿ">ಕನ್ನಡ</button>
         </div>
-    </nav>
+    </aside>
     
     <div class="container">
         {% block content %}{% endblock %}

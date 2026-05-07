@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card">
+<div class="card search-card">
     <h2 data-i18n="nav_relationship">ಸಂಬಂಧ ಹುಡುಕಿ</h2>
     <p class="mb-4 text-secondary" data-i18n="relationship_intro">ಅವರ ಸಂಬಂಧ ತಿಳಿಯಲು ಇಬ್ಬರನ್ನು ಆಯ್ಕೆಮಾಡಿ.</p>
     
     <div class="flex gap-4 items-center mb-4">
-        <select id="p1-select">
+        <select id="p1-select" class="js-person-search-select">
             <option value="" data-i18n="person_1">-- ವ್ಯಕ್ತಿ 1 --</option>
             {% for p in persons %}
                 <option value="{{ p.id }}" data-name-en="{{ p.name_en }}" data-name-kn="{{ p.name_kn }}">{{ p.name_kn }}</option>
@@ -15,14 +15,14 @@
         
         <span style="color: var(--text-secondary)" data-i18n="and">ಮತ್ತು</span>
         
-        <select id="p2-select">
+        <select id="p2-select" class="js-person-search-select">
             <option value="" data-i18n="person_2">-- ವ್ಯಕ್ತಿ 2 --</option>
             {% for p in persons %}
                 <option value="{{ p.id }}" data-name-en="{{ p.name_en }}" data-name-kn="{{ p.name_kn }}">{{ p.name_kn }}</option>
             {% endfor %}
         </select>
         
-        <button onclick="findRelationship()" data-i18n="find">ಹುಡುಕಿ</button>
+        <button id="relationship-submit" onclick="findRelationship()" data-i18n="find">ಹುಡುಕಿ</button>
     </div>
     
     <div id="result" class="mt-8"></div>
@@ -36,11 +36,40 @@
         const p2 = document.getElementById('p2-select').value;
         
         if (!p1 || !p2) return;
-        
-        const res = await fetch(`/api/relationship?p1_id=${p1}&p2_id=${p2}`);
-        const data = await res.json();
-        currentRelationship = data;
-        renderRelationship();
+
+        const container = document.getElementById('result');
+        container.innerHTML = '';
+        currentRelationship = null;
+        showRelationshipLoader(container);
+        setRelationshipLoading(true);
+
+        try {
+            const res = await fetch(`/api/relationship?p1_id=${p1}&p2_id=${p2}`);
+            const data = await res.json();
+            currentRelationship = data;
+            renderRelationship();
+        } finally {
+            setRelationshipLoading(false);
+        }
+    }
+
+    function setRelationshipLoading(isLoading) {
+        const button = document.getElementById('relationship-submit');
+        const firstSelect = document.getElementById('p1-select');
+        const secondSelect = document.getElementById('p2-select');
+        if (button) button.disabled = isLoading;
+        if (firstSelect) {
+            firstSelect.disabled = isLoading;
+            setSearchableSelectDisabled(firstSelect, isLoading);
+        }
+        if (secondSelect) {
+            secondSelect.disabled = isLoading;
+            setSearchableSelectDisabled(secondSelect, isLoading);
+        }
+    }
+
+    function showRelationshipLoader(container) {
+        container.appendChild(createLoadingPanel('relationship', t('loading_relationship')));
     }
 
     function renderRelationship() {

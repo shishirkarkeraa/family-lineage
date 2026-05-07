@@ -2,7 +2,7 @@ import unicodedata
 import os
 
 from indic_transliteration import sanscript
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, inspect, text
+from sqlalchemy import create_engine, Column, Date, Integer, String, ForeignKey, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 def load_env_file(path=".env"):
@@ -43,8 +43,15 @@ class Person(Base):
     name_kn = Column(String, index=True)
     gender = Column(String, nullable=True)
     parent_id = Column(Integer, ForeignKey("persons.id"), nullable=True)
+    parent2_id = Column(Integer, ForeignKey("persons.id"), nullable=True)
+    date_of_birth = Column(Date, nullable=True)
 
-    children = relationship("Person", backref="parent", remote_side=[id])
+    children = relationship(
+        "Person",
+        backref="parent",
+        remote_side=[id],
+        foreign_keys=[parent_id],
+    )
 
 class AdminCredential(Base):
     __tablename__ = "admin_credentials"
@@ -88,6 +95,10 @@ def migrate_person_name_columns():
             connection.execute(text("ALTER TABLE persons ADD COLUMN name_kn VARCHAR"))
         if "name_en" not in columns:
             connection.execute(text("ALTER TABLE persons ADD COLUMN name_en VARCHAR"))
+        if "parent2_id" not in columns:
+            connection.execute(text("ALTER TABLE persons ADD COLUMN parent2_id INTEGER REFERENCES persons(id)"))
+        if "date_of_birth" not in columns:
+            connection.execute(text("ALTER TABLE persons ADD COLUMN date_of_birth DATE"))
 
         if "name" in columns:
             rows = connection.execute(

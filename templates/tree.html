@@ -5,10 +5,24 @@
 <style>
     #mynetwork {
         width: 100%;
-        height: 700px;
+        height: min(700px, calc(100vh - 170px));
+        min-height: 420px;
         border: 1px solid var(--border-color);
-        background: #050505;
+        background-color: #101010;
+        background-image:
+            linear-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.15) 1px, transparent 1px),
+            linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+        background-size: 80px 80px, 80px 80px, 20px 20px, 20px 20px;
         border-radius: 8px;
+    }
+
+    @media (max-width: 720px) {
+        #mynetwork {
+            height: calc(100vh - 150px);
+            min-height: 360px;
+        }
     }
 </style>
 {% endblock %}
@@ -23,26 +37,46 @@
     const nodesData = {{ nodes | tojson | safe }};
     const edgesData = {{ edges | tojson | safe }};
     
+    function isCompactTree() {
+        return window.matchMedia('(max-width: 720px)').matches;
+    }
+
     function buildVisNodes() {
+        const compact = isCompactTree();
         return nodesData.map(node => ({
             id: node.id,
             label: nameForLanguage(node),
             level: node.level,
             shape: 'box',
             color: {
-                background: node.gender === 'Female' ? '#db2777' : (node.gender === 'Male' ? '#2563eb' : '#475569'),
-                border: '#ffffff',
+                background: '#111111',
+                border: '#f8fafc',
                 highlight: {
-                    background: '#ffffff',
-                    border: '#000000'
+                    background: '#181818',
+                    border: '#ffffff'
+                },
+                hover: {
+                    background: '#181818',
+                    border: '#ffffff'
                 }
             },
             font: {
                 color: '#ffffff',
                 face: 'Inter',
-                size: 16
+                size: compact ? 13 : 16
             },
-            margin: 10
+            borderWidth: 2,
+            borderWidthSelected: 2,
+            margin: {
+                top: compact ? 12 : 18,
+                right: compact ? 16 : 28,
+                bottom: compact ? 12 : 18,
+                left: compact ? 16 : 28
+            },
+            widthConstraint: {
+                minimum: compact ? 128 : 180,
+                maximum: compact ? 180 : 260
+            }
         }));
     }
 
@@ -53,10 +87,14 @@
             from: edge.from,
             to: edge.to,
             arrows: 'to',
-            color: { color: 'rgba(255,255,255,0.45)' },
+            color: {
+                color: '#f8fafc',
+                highlight: '#ffffff',
+                hover: '#ffffff'
+            },
             smooth: {
                 enabled: true,
-                type: 'vertical',
+                type: 'discrete',
                 roundness: 0
             }
         }))
@@ -67,32 +105,53 @@
         nodes: visNodes,
         edges: visEdges
     };
-    const options = {
+    function treeOptions() {
+        const compact = isCompactTree();
+        return {
         layout: {
             hierarchical: {
                 direction: 'UD',
                 sortMethod: 'directed',
-                levelSeparation: 150,
-                nodeSpacing: 180,
-                treeSpacing: 220
+                levelSeparation: compact ? 130 : 190,
+                nodeSpacing: compact ? 150 : 220,
+                treeSpacing: compact ? 180 : 260
             }
         },
         edges: {
             chosen: false,
-            width: 1.5,
+            width: 2,
+            arrows: {
+                to: {
+                    enabled: true,
+                    scaleFactor: 0.8,
+                    type: 'arrow'
+                }
+            },
             smooth: {
                 enabled: true,
-                type: 'vertical',
+                type: 'discrete',
                 roundness: 0
             }
         },
+        interaction: {
+            hover: true,
+            dragView: true,
+            zoomView: true
+        },
         physics: false
     };
+    }
     
-    const network = new vis.Network(container, data, options);
+    const network = new vis.Network(container, data, treeOptions());
 
     window.addEventListener('languagechange', () => {
         visNodes.update(buildVisNodes());
+        network.fit();
+    });
+
+    window.addEventListener('resize', () => {
+        visNodes.update(buildVisNodes());
+        network.setOptions(treeOptions());
         network.fit();
     });
 </script>
