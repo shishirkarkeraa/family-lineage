@@ -16,12 +16,80 @@
             linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
         background-size: 80px 80px, 80px 80px, 20px 20px, 20px 20px;
         border-radius: 8px;
+        touch-action: none;
+    }
+
+    .tree-viewer {
+        position: relative;
+    }
+
+    .tree-zoom-controls {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .tree-layout-select {
+        height: 40px;
+        max-width: 190px;
+        border: 1px solid rgba(248, 250, 252, 0.6);
+        border-radius: 8px;
+        background: rgba(17, 17, 17, 0.88);
+        color: #ffffff;
+        font: inherit;
+        font-size: 14px;
+        padding: 0 32px 0 12px;
+        cursor: pointer;
+    }
+
+    .tree-zoom-button {
+        width: 40px;
+        height: 40px;
+        border: 1px solid rgba(248, 250, 252, 0.6);
+        border-radius: 8px;
+        background: rgba(17, 17, 17, 0.88);
+        color: #ffffff;
+        font-size: 24px;
+        line-height: 1;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .tree-zoom-button:hover,
+    .tree-zoom-button:focus-visible,
+    .tree-layout-select:hover,
+    .tree-layout-select:focus-visible {
+        background: rgba(32, 32, 32, 0.96);
+        border-color: #ffffff;
+    }
+
+    .tree-layout-select:focus-visible,
+    .tree-zoom-button:focus-visible {
+        outline: 2px solid #ffffff;
+        outline-offset: 2px;
     }
 
     @media (max-width: 720px) {
         #mynetwork {
             height: calc(100vh - 150px);
             min-height: 360px;
+        }
+
+        .tree-zoom-controls {
+            left: 12px;
+            right: 12px;
+            justify-content: flex-end;
+        }
+
+        .tree-layout-select {
+            flex: 1;
+            min-width: 0;
         }
     }
 </style>
@@ -30,12 +98,25 @@
 {% block content %}
 <div class="card">
     <h2 data-i18n="complete_family">ಸಂಪೂರ್ಣ ಕಾರ್ಕೇರ ಕುಟುಂಬ</h2>
-    <div id="mynetwork"></div>
+    <div class="tree-viewer">
+        <div class="tree-zoom-controls" aria-label="Tree zoom controls">
+            <select class="tree-layout-select" id="tree-layout-direction" aria-label="Tree layout direction">
+                <option value="UD">Top to bottom</option>
+                <option value="LR">Left to right</option>
+                <option value="RL">Right to left</option>
+                <option value="DU">Bottom to top</option>
+            </select>
+            <button type="button" class="tree-zoom-button" id="tree-zoom-out" aria-label="Zoom out">&minus;</button>
+            <button type="button" class="tree-zoom-button" id="tree-zoom-in" aria-label="Zoom in">+</button>
+        </div>
+        <div id="mynetwork"></div>
+    </div>
 </div>
 
 <script type="text/javascript">
     const nodesData = {{ nodes | tojson | safe }};
     const edgesData = {{ edges | tojson | safe }};
+    let treeDirection = 'UD';
     
     function isCompactTree() {
         return window.matchMedia('(max-width: 720px)').matches;
@@ -107,13 +188,14 @@
     };
     function treeOptions() {
         const compact = isCompactTree();
+        const isSideways = treeDirection === 'LR' || treeDirection === 'RL';
         return {
         layout: {
             hierarchical: {
-                direction: 'UD',
+                direction: treeDirection,
                 sortMethod: 'directed',
-                levelSeparation: compact ? 130 : 190,
-                nodeSpacing: compact ? 150 : 220,
+                levelSeparation: isSideways ? (compact ? 190 : 260) : (compact ? 130 : 190),
+                nodeSpacing: isSideways ? (compact ? 120 : 170) : (compact ? 150 : 220),
                 treeSpacing: compact ? 180 : 260
             }
         },
@@ -136,13 +218,56 @@
         interaction: {
             hover: true,
             dragView: true,
-            zoomView: true
+            zoomView: false
         },
         physics: false
     };
     }
     
     const network = new vis.Network(container, data, treeOptions());
+    const minTreeScale = 0.18;
+    const maxTreeScale = 2.4;
+
+    function zoomTree(multiplier) {
+        const scale = Math.max(minTreeScale, Math.min(maxTreeScale, network.getScale() * multiplier));
+        network.moveTo({
+            position: network.getViewPosition(),
+            scale,
+            animation: {
+                duration: 180,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+    }
+
+    document.getElementById('tree-zoom-in').addEventListener('click', () => zoomTree(1.2));
+    document.getElementById('tree-zoom-out').addEventListener('click', () => zoomTree(1 / 1.2));
+    document.getElementById('tree-layout-direction').addEventListener('change', event => {
+        treeDirection = event.target.value;
+        network.setOptions(treeOptions());
+        network.fit({
+            animation: {
+                duration: 240,
+                easingFunction: 'easeInOutQuad'
+            }
+        });
+    });
+
+    container.addEventListener('wheel', event => {
+        if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+        }
+    }, { passive: false });
+
+    container.addEventListener('touchmove', event => {
+        if (event.touches.length > 1) {
+            event.preventDefault();
+        }
+    }, { passive: false });
+
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach(eventName => {
+        container.addEventListener(eventName, event => event.preventDefault());
+    });
 
     window.addEventListener('languagechange', () => {
         visNodes.update(buildVisNodes());

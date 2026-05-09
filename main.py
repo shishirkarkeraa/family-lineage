@@ -8,7 +8,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
-from database import get_db, migrate_person_name_columns, Person, AdminCredential
+from database import (
+    GENDER_FEMALE,
+    GENDER_MALE,
+    GENDER_VALUES,
+    AdminCredential,
+    Person,
+    get_db,
+    migrate_person_name_columns,
+    normalize_gender,
+)
 
 app = FastAPI(title="Karkera Family")
 app.add_middleware(
@@ -60,7 +69,7 @@ def person_form_payload(name_en, name_kn, gender, parent_id, parent2_id, date_of
     return {
         "name_en": name_en.strip() if name_en else None,
         "name_kn": name_kn.strip() if name_kn else None,
-        "gender": gender or None,
+        "gender": normalize_gender(gender),
         "parent_id": parse_optional_int(parent_id),
         "parent2_id": parse_optional_int(parent2_id),
         "date_of_birth": parse_optional_date(date_of_birth),
@@ -170,7 +179,7 @@ async def admin_create_user(
     except ValueError:
         return templates.TemplateResponse(
             "admin_person_form.html",
-            {"request": request, "person": None, "parents": admin_parent_options(db), "error": "Use a valid date of birth."},
+            {"request": request, "person": None, "parents": admin_parent_options(db), "error": "Use a valid date of birth and gender."},
             status_code=400,
         )
 
@@ -217,7 +226,7 @@ async def admin_update_user(
     except ValueError:
         return templates.TemplateResponse(
             "admin_person_form.html",
-            {"request": request, "person": person, "parents": admin_parent_options(db, person_id), "error": "Use a valid date of birth."},
+            {"request": request, "person": person, "parents": admin_parent_options(db, person_id), "error": "Use a valid date of birth and gender."},
             status_code=400,
         )
 
@@ -415,8 +424,8 @@ def family_stats(persons):
     ]
 
     gender_counts = {
-        "male": sum(1 for person in persons if person.gender == "Male"),
-        "female": sum(1 for person in persons if person.gender == "Female"),
+        "male": sum(1 for person in persons if person.gender == GENDER_MALE),
+        "female": sum(1 for person in persons if person.gender == GENDER_FEMALE),
     }
     gender_counts["not_recorded"] = len(persons) - gender_counts["male"] - gender_counts["female"]
 
@@ -485,12 +494,12 @@ def profile_payload(person, persons, levels, ancestors, tree, people_by_id, chil
         "parent": person_payload(parent) if parent else None,
         "children": [person_payload(child) for child in children],
         "siblings": [person_payload(sibling) for sibling in siblings],
-        "brothers": [person_payload(sibling) for sibling in siblings if sibling.gender == "Male"],
-        "sisters": [person_payload(sibling) for sibling in siblings if sibling.gender == "Female"],
+        "brothers": [person_payload(sibling) for sibling in siblings if sibling.gender == GENDER_MALE],
+        "sisters": [person_payload(sibling) for sibling in siblings if sibling.gender == GENDER_FEMALE],
         "unknown_gender_siblings": [
             person_payload(sibling)
             for sibling in siblings
-            if sibling.gender not in {"Male", "Female"}
+            if sibling.gender not in GENDER_VALUES
         ],
         "generation": levels.get(person.id, 0) + 1,
         "generation_index": levels.get(person.id, 0),
@@ -501,9 +510,9 @@ def profile_payload(person, persons, levels, ancestors, tree, people_by_id, chil
         "descendant_count": len(descendants),
         "descendant_generations": max_descendant_depth(tree),
         "sibling_count": len(siblings),
-        "brother_count": sum(1 for sibling in siblings if sibling.gender == "Male"),
-        "sister_count": sum(1 for sibling in siblings if sibling.gender == "Female"),
-        "unknown_gender_sibling_count": sum(1 for sibling in siblings if sibling.gender not in {"Male", "Female"}),
+        "brother_count": sum(1 for sibling in siblings if sibling.gender == GENDER_MALE),
+        "sister_count": sum(1 for sibling in siblings if sibling.gender == GENDER_FEMALE),
+        "unknown_gender_sibling_count": sum(1 for sibling in siblings if sibling.gender not in GENDER_VALUES),
         "known_relation_count": related_people,
         "relation_summary": simple_relation_summary(relation_counts),
     }
@@ -641,9 +650,9 @@ def describe_relationship_from_map(person1, person2, people_by_id):
     return relation_en, exact_relation_kn or relation_kn
 
 def gendered(person, male, female, neutral):
-    if person.gender == "Male":
+    if person.gender == GENDER_MALE:
         return male
-    if person.gender == "Female":
+    if person.gender == GENDER_FEMALE:
         return female
     return neutral
 

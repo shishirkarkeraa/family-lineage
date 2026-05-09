@@ -2,8 +2,21 @@ import unicodedata
 import os
 
 from indic_transliteration import sanscript
-from sqlalchemy import create_engine, Column, Date, Integer, String, ForeignKey, inspect, text
+from sqlalchemy import create_engine, Column, Date, Enum, Integer, String, ForeignKey, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+
+GENDER_MALE = "MALE"
+GENDER_FEMALE = "FEMALE"
+GENDER_VALUES = (GENDER_MALE, GENDER_FEMALE)
+
+def normalize_gender(value):
+    if not value:
+        return None
+
+    normalized = value.strip().upper()
+    if normalized not in GENDER_VALUES:
+        raise ValueError("Gender must be MALE or FEMALE.")
+    return normalized
 
 def load_env_file(path=".env"):
     if not os.path.exists(path):
@@ -30,7 +43,12 @@ if not DATABASE_URL:
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
-engine = create_engine(DATABASE_URL, connect_args={"connect_timeout": 10})
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"connect_timeout": 10},
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
@@ -41,7 +59,7 @@ class Person(Base):
     id = Column(Integer, primary_key=True, index=True)
     name_en = Column(String, index=True)
     name_kn = Column(String, index=True)
-    gender = Column(String, nullable=True)
+    gender = Column(Enum(*GENDER_VALUES, name="gender_enum", validate_strings=True), nullable=True)
     parent_id = Column(Integer, ForeignKey("persons.id"), nullable=True)
     parent2_id = Column(Integer, ForeignKey("persons.id"), nullable=True)
     date_of_birth = Column(Date, nullable=True)
@@ -88,7 +106,8 @@ def migrate_person_name_columns():
         init_db()
         return
 
-    columns = {column["name"] for column in inspector.get_columns("persons")}
+    column_info = {column["name"]: column for column in inspector.get_columns("persons")}
+    columns = set(column_info)
 
     with engine.begin() as connection:
         if "name_kn" not in columns:
@@ -99,6 +118,46 @@ def migrate_person_name_columns():
             connection.execute(text("ALTER TABLE persons ADD COLUMN parent2_id INTEGER REFERENCES persons(id)"))
         if "date_of_birth" not in columns:
             connection.execute(text("ALTER TABLE persons ADD COLUMN date_of_birth DATE"))
+        if "gender" not in columns:
+            if engine.dialect.name == "postgresql":
+                connection.execute(
+                    text(
+                        "DO $$ BEGIN "
+                        "CREATE TYPE gender_enum AS ENUM ('MALE', 'FEMALE'); "
+                        "EXCEPTION WHEN duplicate_object THEN NULL; "
+                        "END $$"
+                    )
+                )
+                connection.execute(text("ALTER TABLE persons ADD COLUMN gender gender_enum"))
+            else:
+                connection.execute(text("ALTER TABLE persons ADD COLUMN gender VARCHAR"))
+
+        if engine.dialect.name == "postgresql":
+            connection.execute(text("UPDATE persons SET gender = 'MALE' WHERE lower(gender::text) = 'male'"))
+            connection.execute(text("UPDATE persons SET gender = 'FEMALE' WHERE lower(gender::text) = 'female'"))
+            connection.execute(text("UPDATE persons SET gender = NULL WHERE gender::text NOT IN ('MALE', 'FEMALE')"))
+        else:
+            connection.execute(text("UPDATE persons SET gender = 'MALE' WHERE lower(gender) = 'male'"))
+            connection.execute(text("UPDATE persons SET gender = 'FEMALE' WHERE lower(gender) = 'female'"))
+            connection.execute(text("UPDATE persons SET gender = NULL WHERE gender NOT IN ('MALE', 'FEMALE')"))
+
+        gender_column = column_info.get("gender")
+        if (
+            gender_column
+            and engine.dialect.name == "postgresql"
+            and gender_column["type"].__class__.__name__ != "ENUM"
+        ):
+            connection.execute(
+                text(
+                    "DO $$ BEGIN "
+                    "CREATE TYPE gender_enum AS ENUM ('MALE', 'FEMALE'); "
+                    "EXCEPTION WHEN duplicate_object THEN NULL; "
+                    "END $$"
+                )
+            )
+            connection.execute(
+                text("ALTER TABLE persons ALTER COLUMN gender TYPE gender_enum USING gender::gender_enum")
+            )
 
         if "name" in columns:
             rows = connection.execute(

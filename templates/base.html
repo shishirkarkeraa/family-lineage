@@ -197,8 +197,8 @@
         }
 
         function genderForLanguage(gender) {
-            if (gender === 'Male') return t('male');
-            if (gender === 'Female') return t('female');
+            if (gender === 'MALE' || gender === 'Male') return t('male');
+            if (gender === 'FEMALE' || gender === 'Female') return t('female');
             return t('unknown_gender');
         }
 

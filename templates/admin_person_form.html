@@ -29,8 +29,8 @@
                 <span>Gender</span>
                 <select name="gender">
                     <option value="" {{ "selected" if not is_edit or not person.gender else "" }}>Not specified</option>
-                    <option value="Male" {{ "selected" if is_edit and person.gender == "Male" else "" }}>Male</option>
-                    <option value="Female" {{ "selected" if is_edit and person.gender == "Female" else "" }}>Female</option>
+                    <option value="MALE" {{ "selected" if is_edit and person.gender == "MALE" else "" }}>Male</option>
+                    <option value="FEMALE" {{ "selected" if is_edit and person.gender == "FEMALE" else "" }}>Female</option>
                 </select>
             </label>
             <label>
