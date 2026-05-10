@@ -27,6 +27,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup():
+    if os.getenv("VERCEL") and os.getenv("RUN_DB_MIGRATIONS_ON_STARTUP") != "1":
+        return
     migrate_person_name_columns()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")

@@ -1,9 +1,13 @@
 import unicodedata
 import os
 
-from indic_transliteration import sanscript
 from sqlalchemy import create_engine, Column, Date, Enum, Integer, String, ForeignKey, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+
+try:
+    from indic_transliteration import sanscript
+except ModuleNotFoundError:
+    sanscript = None
 
 GENDER_MALE = "MALE"
 GENDER_FEMALE = "FEMALE"
@@ -92,7 +96,11 @@ def to_english(kannada_text):
     if not kannada_text:
         return None
 
-    transliterated = sanscript.transliterate(kannada_text, sanscript.KANNADA, sanscript.IAST)
+    transliterated = (
+        sanscript.transliterate(kannada_text, sanscript.KANNADA, sanscript.IAST)
+        if sanscript
+        else kannada_text
+    )
     ascii_name = ''.join(
         char
         for char in unicodedata.normalize('NFD', transliterated)
