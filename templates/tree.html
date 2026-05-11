@@ -227,9 +227,23 @@
     const network = new vis.Network(container, data, treeOptions());
     const minTreeScale = 0.18;
     const maxTreeScale = 2.4;
+    let lastPinchDistance = null;
+
+    function clampTreeScale(scale) {
+        return Math.max(minTreeScale, Math.min(maxTreeScale, scale));
+    }
+
+    function touchDistance(touches) {
+        const firstTouch = touches[0];
+        const secondTouch = touches[1];
+        return Math.hypot(
+            firstTouch.clientX - secondTouch.clientX,
+            firstTouch.clientY - secondTouch.clientY
+        );
+    }
 
     function zoomTree(multiplier) {
-        const scale = Math.max(minTreeScale, Math.min(maxTreeScale, network.getScale() * multiplier));
+        const scale = clampTreeScale(network.getScale() * multiplier);
         network.moveTo({
             position: network.getViewPosition(),
             scale,
@@ -262,8 +276,28 @@
     container.addEventListener('touchmove', event => {
         if (event.touches.length > 1) {
             event.preventDefault();
+            const pinchDistance = touchDistance(event.touches);
+            if (lastPinchDistance) {
+                const nextScale = clampTreeScale(network.getScale() * (pinchDistance / lastPinchDistance));
+                network.moveTo({
+                    position: network.getViewPosition(),
+                    scale: nextScale,
+                    animation: false
+                });
+            }
+            lastPinchDistance = pinchDistance;
         }
     }, { passive: false });
+
+    container.addEventListener('touchend', event => {
+        if (event.touches.length < 2) {
+            lastPinchDistance = null;
+        }
+    });
+
+    container.addEventListener('touchcancel', () => {
+        lastPinchDistance = null;
+    });
 
     ['gesturestart', 'gesturechange', 'gestureend'].forEach(eventName => {
         container.addEventListener(eventName, event => event.preventDefault());
