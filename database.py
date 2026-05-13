@@ -1,7 +1,8 @@
 import unicodedata
 import os
+from datetime import datetime
 
-from sqlalchemy import create_engine, Column, Date, Enum, Integer, String, ForeignKey, inspect, text
+from sqlalchemy import create_engine, Column, Date, DateTime, Enum, ForeignKey, Integer, JSON, String, Text, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 try:
@@ -12,6 +13,13 @@ except ModuleNotFoundError:
 GENDER_MALE = "MALE"
 GENDER_FEMALE = "FEMALE"
 GENDER_VALUES = (GENDER_MALE, GENDER_FEMALE)
+CHANGE_ADD_DESCENDANT = "ADD_DESCENDANT"
+CHANGE_EDIT_PERSON = "EDIT_PERSON"
+CHANGE_TYPES = (CHANGE_ADD_DESCENDANT, CHANGE_EDIT_PERSON)
+CHANGE_PENDING = "PENDING"
+CHANGE_APPROVED = "APPROVED"
+CHANGE_REJECTED = "REJECTED"
+CHANGE_STATUSES = (CHANGE_PENDING, CHANGE_APPROVED, CHANGE_REJECTED)
 
 def normalize_gender(value):
     if not value:
@@ -81,7 +89,45 @@ class AdminCredential(Base):
     id = Column(Integer, primary_key=True, index=True)
     password = Column(String, nullable=False)
 
-def init_db():
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    google_sub = Column(String, unique=True, nullable=False, index=True)
+    email = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=True)
+    picture = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_login_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+class ChangeRequest(Base):
+    __tablename__ = "changes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    change_type = Column(String, nullable=False, index=True)
+    status = Column(String, default=CHANGE_PENDING, nullable=False, index=True)
+    target_person_id = Column(Integer, ForeignKey("persons.id"), nullable=True)
+    parent_person_id = Column(Integer, ForeignKey("persons.id"), nullable=True)
+    payload = Column(JSON, nullable=False)
+    requester_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    requester_email = Column(String, nullable=True)
+    requester_name = Column(String, nullable=True)
+    reviewer_note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    reviewed_at = Column(DateTime, nullable=True)
+
+    requester = relationship("User")
+    target_person = relationship("Person", foreign_keys=[target_person_id])
+    parent_person = relationship("Person", foreign_keys=[parent_person_id])
+
+_base_tables_ready = False
+
+def ensure_base_tables():
+    global _base_tables_ready
+    if _base_tables_ready:
+        return
+
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
@@ -91,6 +137,11 @@ def init_db():
             db.commit()
     finally:
         db.close()
+
+    _base_tables_ready = True
+
+def init_db():
+    ensure_base_tables()
 
 def to_english(kannada_text):
     if not kannada_text:
@@ -186,6 +237,7 @@ def migrate_person_name_columns():
     init_db()
 
 def get_db():
+    ensure_base_tables()
     db = SessionLocal()
     try:
         yield db

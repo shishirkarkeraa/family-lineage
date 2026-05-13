@@ -75,6 +75,97 @@
         outline-offset: 2px;
     }
 
+    .tree-action-panel {
+        background: rgba(8, 8, 8, 0.96);
+        border: 1px solid rgba(248, 250, 252, 0.32);
+        border-radius: 8px;
+        box-shadow: 0 20px 52px rgba(0, 0, 0, 0.55);
+        display: none;
+        max-height: calc(100% - 88px);
+        overflow: auto;
+        padding: 1rem;
+        position: absolute;
+        right: 12px;
+        top: 64px;
+        width: min(360px, calc(100% - 24px));
+        z-index: 3;
+    }
+
+    .tree-action-panel.is-open {
+        display: grid;
+        gap: 0.85rem;
+    }
+
+    .tree-action-header {
+        align-items: start;
+        display: flex;
+        gap: 0.75rem;
+        justify-content: space-between;
+    }
+
+    .tree-action-header h3 {
+        font-size: 1rem;
+        margin: 0;
+    }
+
+    .tree-action-kicker,
+    .tree-action-note,
+    .tree-action-status {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        margin: 0;
+    }
+
+    .tree-action-buttons,
+    .tree-action-footer {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: flex-end;
+    }
+
+    .tree-action-buttons .tree-zoom-button,
+    .tree-action-footer .tree-zoom-button {
+        font-size: 0.88rem;
+        height: auto;
+        min-height: 40px;
+        padding: 0.6rem 0.75rem;
+        width: auto;
+    }
+
+    .tree-action-form {
+        display: none;
+        gap: 0.75rem;
+    }
+
+    .tree-action-form.is-open {
+        display: grid;
+    }
+
+    .tree-action-form label {
+        color: var(--text-secondary);
+        display: grid;
+        font-size: 0.85rem;
+        font-weight: 700;
+        gap: 0.35rem;
+    }
+
+    .tree-action-form input,
+    .tree-action-form select {
+        min-height: 40px;
+        padding: 0.6rem 0.7rem;
+    }
+
+    .tree-action-status.is-error {
+        color: #fecaca;
+    }
+
+    .tree-panel-close {
+        min-height: 34px;
+        min-width: 34px;
+        padding: 0;
+    }
+
     @media (max-width: 720px) {
         #mynetwork {
             height: calc(100vh - 150px);
@@ -90,6 +181,12 @@
         .tree-layout-select {
             flex: 1;
             min-width: 0;
+        }
+
+        .tree-action-panel {
+            bottom: 12px;
+            max-height: min(440px, calc(100% - 88px));
+            top: auto;
         }
     }
 </style>
@@ -110,6 +207,76 @@
             <button type="button" class="tree-zoom-button" id="tree-zoom-in" aria-label="Zoom in">+</button>
         </div>
         <div id="mynetwork"></div>
+        <aside class="tree-action-panel" id="tree-action-panel" aria-live="polite">
+            <div class="tree-action-header">
+                <div>
+                    <p class="tree-action-kicker" data-i18n="tree_actions">ವಂಶವೃಕ್ಷ ಕ್ರಿಯೆಗಳು</p>
+                    <h3 id="tree-action-person" data-i18n="choose_person_prompt">ನವೀಕರಣವನ್ನು ವಿನಂತಿಸಲು ವಂಶವೃಕ್ಷದಲ್ಲಿ ಒಬ್ಬರನ್ನು ಆಯ್ಕೆಮಾಡಿ.</h3>
+                </div>
+                <button type="button" class="tree-zoom-button tree-panel-close" id="tree-action-close" data-i18n-aria-label="close_menu" aria-label="ಮೆನು ಮುಚ್ಚಿರಿ">&times;</button>
+            </div>
+            <div class="tree-action-buttons" id="tree-action-buttons">
+                <button type="button" class="tree-zoom-button" id="tree-add-descendant" data-i18n="add_descendant">ವಂಶಜರನ್ನು ಸೇರಿಸಿ</button>
+                <button type="button" class="tree-zoom-button" id="tree-edit-person" data-i18n="edit_person">ವ್ಯಕ್ತಿಯನ್ನು ತಿದ್ದುಪಡಿ ಮಾಡಿ</button>
+            </div>
+            <form class="tree-action-form" id="tree-add-form">
+                <input type="hidden" name="parent_id">
+                <p class="tree-action-note" id="tree-add-note"></p>
+                <label>
+                    <span data-i18n="name_kn_label">ಕನ್ನಡ ಹೆಸರು</span>
+                    <input type="text" name="name_kn">
+                </label>
+                <label>
+                    <span data-i18n="name_en_label">ಇಂಗ್ಲಿಷ್ ಹೆಸರು</span>
+                    <input type="text" name="name_en">
+                </label>
+                <label>
+                    <span data-i18n="gender">ಲಿಂಗ</span>
+                    <select name="gender">
+                        <option value="" data-i18n="not_specified">ನಿರ್ದಿಷ್ಟಪಡಿಸಲಾಗಿಲ್ಲ</option>
+                        <option value="MALE" data-i18n="male">ಪುರುಷ</option>
+                        <option value="FEMALE" data-i18n="female">ಮಹಿಳೆ</option>
+                    </select>
+                </label>
+                <label>
+                    <span data-i18n="dob_label">ಜನ್ಮ ದಿನಾಂಕ</span>
+                    <input type="date" name="date_of_birth">
+                </label>
+                <div class="tree-action-footer">
+                    <button type="button" class="tree-zoom-button tree-form-cancel" data-i18n="cancel">ರದ್ದುಮಾಡಿ</button>
+                    <button type="submit" class="tree-zoom-button" data-i18n="submit_for_review">ಪರಿಶೀಲನೆಗೆ ಸಲ್ಲಿಸಿ</button>
+                </div>
+            </form>
+            <form class="tree-action-form" id="tree-edit-form">
+                <input type="hidden" name="person_id">
+                <p class="tree-action-note" data-i18n="edit_person_note">ಬದಲಾವಣೆಗಳು ಆಡ್ಮಿನ್ ಪರಿಶೀಲನೆಗೆ ಸಲ್ಲಿಸಲಾಗುತ್ತದೆ ಮತ್ತು ತಕ್ಷಣ ವಂಶವೃಕ್ಷದಲ್ಲಿ ಕಾಣಿಸದು.</p>
+                <label>
+                    <span data-i18n="name_kn_label">ಕನ್ನಡ ಹೆಸರು</span>
+                    <input type="text" name="name_kn">
+                </label>
+                <label>
+                    <span data-i18n="name_en_label">ಇಂಗ್ಲಿಷ್ ಹೆಸರು</span>
+                    <input type="text" name="name_en">
+                </label>
+                <label>
+                    <span data-i18n="gender">ಲಿಂಗ</span>
+                    <select name="gender">
+                        <option value="" data-i18n="not_specified">ನಿರ್ದಿಷ್ಟಪಡಿಸಲಾಗಿಲ್ಲ</option>
+                        <option value="MALE" data-i18n="male">ಪುರುಷ</option>
+                        <option value="FEMALE" data-i18n="female">ಮಹಿಳೆ</option>
+                    </select>
+                </label>
+                <label>
+                    <span data-i18n="dob_label">ಜನ್ಮ ದಿನಾಂಕ</span>
+                    <input type="date" name="date_of_birth">
+                </label>
+                <div class="tree-action-footer">
+                    <button type="button" class="tree-zoom-button tree-form-cancel" data-i18n="cancel">ರದ್ದುಮಾಡಿ</button>
+                    <button type="submit" class="tree-zoom-button" data-i18n="submit_for_review">ಪರಿಶೀಲನೆಗೆ ಸಲ್ಲಿಸಿ</button>
+                </div>
+            </form>
+            <p class="tree-action-status" id="tree-action-status"></p>
+        </aside>
     </div>
 </div>
 
@@ -229,6 +396,98 @@
     const minTreeScale = 0.18;
     const maxTreeScale = 2.4;
     let lastPinchDistance = null;
+    let selectedTreeNode = null;
+    const actionPanel = document.getElementById('tree-action-panel');
+    const actionPerson = document.getElementById('tree-action-person');
+    const actionButtons = document.getElementById('tree-action-buttons');
+    const actionStatus = document.getElementById('tree-action-status');
+    const addForm = document.getElementById('tree-add-form');
+    const editForm = document.getElementById('tree-edit-form');
+
+    function nodeById(id) {
+        return nodesData.find(node => node.id === id);
+    }
+
+    function setActionStatus(message = '', isError = false) {
+        actionStatus.textContent = message;
+        actionStatus.classList.toggle('is-error', isError);
+    }
+
+    function closeTreeForms() {
+        addForm.classList.remove('is-open');
+        editForm.classList.remove('is-open');
+        actionButtons.hidden = false;
+    }
+
+    function renderTreeActionText() {
+        if (!selectedTreeNode) return;
+        const selectedName = nameForLanguage(selectedTreeNode) || `Person #${selectedTreeNode.id}`;
+        actionPerson.textContent = selectedName;
+        document.getElementById('tree-add-note').textContent = t('adding_descendant_note', { parent: selectedName });
+    }
+
+    function openTreeActionPanel(node) {
+        selectedTreeNode = node;
+        actionPanel.classList.add('is-open');
+        actionButtons.hidden = false;
+        closeTreeForms();
+        setActionStatus('');
+        renderTreeActionText();
+    }
+
+    function showAddForm() {
+        if (!selectedTreeNode) return;
+        closeTreeForms();
+        addForm.reset();
+        addForm.elements.parent_id.value = selectedTreeNode.id;
+        addForm.classList.add('is-open');
+        actionButtons.hidden = true;
+        setActionStatus('');
+        renderTreeActionText();
+        addForm.elements.name_kn.focus();
+    }
+
+    function showEditForm() {
+        if (!selectedTreeNode) return;
+        closeTreeForms();
+        editForm.elements.person_id.value = selectedTreeNode.id;
+        editForm.elements.name_kn.value = selectedTreeNode.name_kn || '';
+        editForm.elements.name_en.value = selectedTreeNode.name_en || '';
+        editForm.elements.gender.value = selectedTreeNode.gender || '';
+        editForm.elements.date_of_birth.value = selectedTreeNode.date_of_birth || '';
+        editForm.classList.add('is-open');
+        actionButtons.hidden = true;
+        setActionStatus('');
+        editForm.elements.name_kn.focus();
+    }
+
+    async function submitTreeChange(form, url, validateNames = false) {
+        setActionStatus('');
+        if (validateNames && !form.elements.name_kn.value.trim() && !form.elements.name_en.value.trim()) {
+            setActionStatus(t('enter_one_name'), true);
+            return;
+        }
+
+        const submitButton = form.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                body: new FormData(form)
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                setActionStatus(payload.error_key ? t(payload.error_key) : (payload.error || t('no_changes_submitted')), true);
+                return;
+            }
+            closeTreeForms();
+            setActionStatus(t('review_submit_success'));
+        } catch (error) {
+            setActionStatus(t('request_failed'), true);
+        } finally {
+            submitButton.disabled = false;
+        }
+    }
 
     function clampTreeScale(scale) {
         return Math.max(minTreeScale, Math.min(maxTreeScale, scale));
@@ -254,6 +513,35 @@
             }
         });
     }
+
+    network.on('click', params => {
+        if (!params.nodes.length) return;
+        const node = nodeById(params.nodes[0]);
+        if (node) openTreeActionPanel(node);
+    });
+
+    document.getElementById('tree-action-close').addEventListener('click', () => {
+        actionPanel.classList.remove('is-open');
+        selectedTreeNode = null;
+        closeTreeForms();
+        setActionStatus('');
+    });
+    document.getElementById('tree-add-descendant').addEventListener('click', showAddForm);
+    document.getElementById('tree-edit-person').addEventListener('click', showEditForm);
+    document.querySelectorAll('.tree-form-cancel').forEach(button => {
+        button.addEventListener('click', () => {
+            closeTreeForms();
+            setActionStatus('');
+        });
+    });
+    addForm.addEventListener('submit', event => {
+        event.preventDefault();
+        submitTreeChange(addForm, '/api/changes/add-descendant', true);
+    });
+    editForm.addEventListener('submit', event => {
+        event.preventDefault();
+        submitTreeChange(editForm, '/api/changes/edit-person');
+    });
 
     document.getElementById('tree-zoom-in').addEventListener('click', () => zoomTree(1.2));
     document.getElementById('tree-zoom-out').addEventListener('click', () => zoomTree(1 / 1.2));
@@ -306,6 +594,7 @@
 
     window.addEventListener('languagechange', () => {
         visNodes.update(buildVisNodes());
+        renderTreeActionText();
         network.fit();
     });
 

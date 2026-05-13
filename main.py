@@ -1,35 +1,64 @@
 import os
+import json
+import secrets
 import time
 from datetime import datetime
+from urllib.parse import urlencode, urlparse
+from urllib.request import Request as UrlRequest, urlopen
+from urllib.error import URLError
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 from database import (
+    CHANGE_ADD_DESCENDANT,
+    CHANGE_APPROVED,
+    CHANGE_EDIT_PERSON,
+    CHANGE_PENDING,
+    CHANGE_REJECTED,
     GENDER_FEMALE,
     GENDER_MALE,
     GENDER_VALUES,
     AdminCredential,
+    ChangeRequest,
     Person,
+    User,
     get_db,
     migrate_person_name_columns,
     normalize_gender,
 )
 
 app = FastAPI(title="Karkera Family")
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=os.getenv("ADMIN_SESSION_SECRET", "family-lineage-admin"),
-)
 
 @app.on_event("startup")
 def startup():
     if os.getenv("VERCEL") and os.getenv("RUN_DB_MIGRATIONS_ON_STARTUP") != "1":
         return
     migrate_person_name_columns()
+
+PUBLIC_EXEMPT_PREFIXES = ("/admin", "/auth", "/static")
+PUBLIC_EXEMPT_PATHS = {"/favicon.ico", "/favicon.png", "/robots.txt"}
+
+@app.middleware("http")
+async def require_public_google_login(request: Request, call_next):
+    path = request.url.path
+    is_exempt = path in PUBLIC_EXEMPT_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_EXEMPT_PREFIXES)
+    if is_exempt or request.session.get("public_user_id"):
+        return await call_next(request)
+
+    if path.startswith("/api"):
+        return JSONResponse({"error": "Google login is required."}, status_code=401)
+
+    login_url = "/auth/login?" + urlencode({"next": str(request.url)})
+    return RedirectResponse(login_url, status_code=303)
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("ADMIN_SESSION_SECRET", "family-lineage-admin"),
+)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
@@ -54,6 +83,71 @@ def admin_required(request: Request):
     if not request.session.get("admin_logged_in"):
         return RedirectResponse("/admin/login", status_code=303)
     return None
+
+def public_user_required(request: Request, db: Session):
+    user_id = request.session.get("public_user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Google login is required")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        request.session.pop("public_user_id", None)
+        raise HTTPException(status_code=401, detail="Google login is required")
+    return user
+
+def app_base_url(request: Request):
+    configured_url = os.getenv("APP_BASE_URL")
+    if configured_url:
+        return configured_url.rstrip("/")
+
+    vercel_url = os.getenv("VERCEL_URL")
+    if vercel_url:
+        return f"https://{vercel_url}".rstrip("/")
+
+    return str(request.base_url).rstrip("/")
+
+def google_redirect_uri(request: Request):
+    return os.getenv("GOOGLE_REDIRECT_URI") or f"{app_base_url(request)}/auth/callback"
+
+def safe_next_url(next_url, request: Request):
+    if not next_url:
+        return "/"
+
+    parsed = urlparse(next_url)
+    if not parsed.netloc and next_url.startswith("/") and not next_url.startswith("//"):
+        return next_url
+
+    app_origin = urlparse(app_base_url(request))
+    if parsed.scheme in {"http", "https"} and parsed.netloc == app_origin.netloc:
+        return next_url
+
+    return "/"
+
+def fetch_json(url, data=None, headers=None):
+    body = urlencode(data).encode("utf-8") if data else None
+    request = UrlRequest(url, data=body, headers=headers or {})
+    with urlopen(request, timeout=10) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+def upsert_google_user(db, profile):
+    google_sub = profile.get("sub")
+    email = profile.get("email")
+    if not google_sub or not email:
+        raise HTTPException(status_code=400, detail="Google profile did not include required identity data")
+
+    user = db.query(User).filter(User.google_sub == google_sub).first()
+    now = datetime.utcnow()
+    if not user:
+        user = User(google_sub=google_sub, email=email, created_at=now)
+        db.add(user)
+
+    user.email = email
+    user.name = profile.get("name")
+    user.picture = profile.get("picture")
+    user.last_login_at = now
+    db.commit()
+    db.refresh(user)
+    return user
 
 def person_option_label(person):
     names = [name for name in (person.name_en, person.name_kn) if name]
@@ -85,6 +179,69 @@ def assign_person_form(person, payload):
     person.parent2_id = payload["parent2_id"]
     person.date_of_birth = payload["date_of_birth"]
 
+def basic_person_payload(name_en, name_kn, gender, date_of_birth):
+    parsed_date = parse_optional_date(date_of_birth)
+    return {
+        "name_en": name_en.strip() if name_en else None,
+        "name_kn": name_kn.strip() if name_kn else None,
+        "gender": normalize_gender(gender),
+        "date_of_birth": parsed_date.isoformat() if parsed_date else None,
+    }
+
+def apply_basic_person_payload(person, payload):
+    person.name_en = payload.get("name_en")
+    person.name_kn = payload.get("name_kn")
+    person.gender = payload.get("gender")
+    person.date_of_birth = parse_optional_date(payload.get("date_of_birth"))
+
+def display_change_value(value):
+    return value if value not in (None, "") else "-"
+
+def basic_person_current_values(person):
+    return {
+        "name_en": person.name_en,
+        "name_kn": person.name_kn,
+        "gender": person.gender,
+        "date_of_birth": person.date_of_birth.isoformat() if person.date_of_birth else None,
+    }
+
+def pending_change_rows(db):
+    changes = (
+        db.query(ChangeRequest)
+        .filter(ChangeRequest.status == CHANGE_PENDING)
+        .order_by(ChangeRequest.created_at.desc(), ChangeRequest.id.desc())
+        .all()
+    )
+    field_labels = {
+        "name_en": "Name EN",
+        "name_kn": "Name KN",
+        "gender": "Gender",
+        "date_of_birth": "Date of birth",
+        "parent_id": "Parent",
+    }
+    return [
+        {
+            "id": change.id,
+            "change_type": change.change_type,
+            "change_label": "Add descendant" if change.change_type == CHANGE_ADD_DESCENDANT else "Edit person",
+            "requester": change.requester_name or change.requester_email or "Unknown",
+            "requester_email": change.requester_email,
+            "created_at": change.created_at,
+            "target": person_option_label(change.target_person) if change.target_person else None,
+            "parent": person_option_label(change.parent_person) if change.parent_person else None,
+            "submitted": [
+                {"label": field_labels.get(key, key), "value": display_change_value(value)}
+                for key, value in (change.payload or {}).items()
+                if key in field_labels
+            ],
+            "current": [
+                {"label": field_labels.get(key, key), "value": display_change_value(value)}
+                for key, value in (basic_person_current_values(change.target_person).items() if change.target_person else [])
+            ] if change.change_type == CHANGE_EDIT_PERSON else [],
+        }
+        for change in changes
+    ]
+
 def admin_people(db):
     people = db.query(Person).order_by(Person.name_en, Person.name_kn, Person.id).all()
     people_by_id = {person.id: person for person in people}
@@ -106,6 +263,74 @@ def admin_parent_options(db, exclude_person_id=None):
     if exclude_person_id is not None:
         query = query.filter(Person.id != exclude_person_id)
     return query.order_by(Person.name_en, Person.name_kn, Person.id).all()
+
+@app.get("/auth/login")
+async def google_login(request: Request, next: str = "/"):
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    if not client_id:
+        return HTMLResponse("Google login is not configured.", status_code=500)
+
+    state = secrets.token_urlsafe(24)
+    request.session["google_oauth_state"] = state
+    request.session["google_oauth_next"] = safe_next_url(next, request)
+
+    params = {
+        "client_id": client_id,
+        "redirect_uri": google_redirect_uri(request),
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "prompt": "select_account",
+    }
+    return RedirectResponse("https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params), status_code=303)
+
+@app.get("/auth/callback")
+async def google_callback(request: Request, code: str = "", state: str = "", db: Session = Depends(get_db)):
+    expected_state = request.session.pop("google_oauth_state", None)
+    next_url = request.session.pop("google_oauth_next", "/")
+    if not state or state != expected_state or not code:
+        return HTMLResponse("Google login could not be verified.", status_code=400)
+
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return HTMLResponse("Google login is not configured.", status_code=500)
+
+    try:
+        token_payload = fetch_json(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": google_redirect_uri(request),
+                "grant_type": "authorization_code",
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        access_token = token_payload.get("access_token")
+        if not access_token:
+            return HTMLResponse("Google login did not return an access token.", status_code=400)
+
+        profile = fetch_json(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    except (URLError, TimeoutError, json.JSONDecodeError):
+        return HTMLResponse("Google login failed. Please try again.", status_code=502)
+
+    user = upsert_google_user(db, profile)
+    request.session["public_user_id"] = user.id
+    request.session["public_user_email"] = user.email
+    request.session["public_user_name"] = user.name
+    return RedirectResponse(next_url or "/", status_code=303)
+
+@app.get("/auth/logout")
+async def google_logout(request: Request):
+    request.session.pop("public_user_id", None)
+    request.session.pop("public_user_email", None)
+    request.session.pop("public_user_name", None)
+    return RedirectResponse("/auth/login", status_code=303)
 
 @app.get("/admin/login", response_class=HTMLResponse)
 async def admin_login(request: Request):
@@ -142,7 +367,12 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
         return redirect
     return templates.TemplateResponse(
         "admin_dashboard.html",
-        {"request": request, "people": admin_people(db), "parents": admin_parent_options(db)},
+        {
+            "request": request,
+            "people": admin_people(db),
+            "parents": admin_parent_options(db),
+            "pending_changes": pending_change_rows(db),
+        },
     )
 
 @app.get("/admin/users/new", response_class=HTMLResponse)
@@ -232,6 +462,64 @@ async def admin_update_user(
             status_code=400,
         )
 
+@app.post("/admin/changes/{change_id}/approve")
+async def admin_approve_change(request: Request, change_id: int, db: Session = Depends(get_db)):
+    redirect = admin_required(request)
+    if redirect:
+        return redirect
+
+    change = db.query(ChangeRequest).filter(
+        ChangeRequest.id == change_id,
+        ChangeRequest.status == CHANGE_PENDING,
+    ).first()
+    if not change:
+        raise HTTPException(status_code=404, detail="Pending change not found")
+
+    if change.change_type == CHANGE_ADD_DESCENDANT:
+        person = Person(parent_id=change.parent_person_id)
+        apply_basic_person_payload(person, change.payload)
+        person.parent_id = change.payload.get("parent_id") or change.parent_person_id
+        db.add(person)
+    elif change.change_type == CHANGE_EDIT_PERSON:
+        person = db.query(Person).filter(Person.id == change.target_person_id).first()
+        if not person:
+            raise HTTPException(status_code=404, detail="Target person not found")
+        apply_basic_person_payload(person, change.payload)
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported change type")
+
+    change.status = CHANGE_APPROVED
+    change.reviewed_at = datetime.utcnow()
+    change.updated_at = datetime.utcnow()
+    db.commit()
+    clear_person_cache()
+    return RedirectResponse("/admin", status_code=303)
+
+@app.post("/admin/changes/{change_id}/reject")
+async def admin_reject_change(
+    request: Request,
+    change_id: int,
+    reviewer_note: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    redirect = admin_required(request)
+    if redirect:
+        return redirect
+
+    change = db.query(ChangeRequest).filter(
+        ChangeRequest.id == change_id,
+        ChangeRequest.status == CHANGE_PENDING,
+    ).first()
+    if not change:
+        raise HTTPException(status_code=404, detail="Pending change not found")
+
+    change.status = CHANGE_REJECTED
+    change.reviewer_note = reviewer_note.strip() or None
+    change.reviewed_at = datetime.utcnow()
+    change.updated_at = datetime.utcnow()
+    db.commit()
+    return RedirectResponse("/admin", status_code=303)
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, db: Session = Depends(get_db)):
     persons = get_cached_persons(db)
@@ -250,12 +538,87 @@ async def tree_view(request: Request, db: Session = Depends(get_db)):
             "name_en": p.name_en,
             "name_kn": p.name_kn,
             "gender": p.gender,
+            "date_of_birth": p.date_of_birth.isoformat() if p.date_of_birth else None,
             "level": levels.get(p.id, 0),
         }
         for p in persons
     ]
     edges = [{"from": p.parent_id, "to": p.id} for p in persons if p.parent_id]
     return templates.TemplateResponse("tree.html", {"request": request, "nodes": nodes, "edges": edges})
+
+@app.post("/api/changes/add-descendant")
+async def request_add_descendant(
+    request: Request,
+    parent_id: int = Form(...),
+    name_en: str = Form(""),
+    name_kn: str = Form(""),
+    gender: str = Form(""),
+    date_of_birth: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = public_user_required(request, db)
+    parent = db.query(Person).filter(Person.id == parent_id).first()
+    if not parent:
+        return JSONResponse({"error_key": "person_not_found"}, status_code=404)
+
+    try:
+        payload = basic_person_payload(name_en, name_kn, gender, date_of_birth)
+    except ValueError:
+        return JSONResponse({"error_key": "invalid_date_gender"}, status_code=400)
+
+    if not payload["name_en"] and not payload["name_kn"]:
+        return JSONResponse({"error_key": "enter_one_name"}, status_code=400)
+
+    payload["parent_id"] = parent.id
+    change = ChangeRequest(
+        change_type=CHANGE_ADD_DESCENDANT,
+        status=CHANGE_PENDING,
+        parent_person_id=parent.id,
+        payload=payload,
+        requester_user_id=user.id,
+        requester_email=user.email,
+        requester_name=user.name,
+    )
+    db.add(change)
+    db.commit()
+    return {"message": "Your edit has been submitted and will be reflected after review."}
+
+@app.post("/api/changes/edit-person")
+async def request_edit_person(
+    request: Request,
+    person_id: int = Form(...),
+    name_en: str = Form(""),
+    name_kn: str = Form(""),
+    gender: str = Form(""),
+    date_of_birth: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = public_user_required(request, db)
+    person = db.query(Person).filter(Person.id == person_id).first()
+    if not person:
+        return JSONResponse({"error_key": "person_not_found"}, status_code=404)
+
+    try:
+        payload = basic_person_payload(name_en, name_kn, gender, date_of_birth)
+    except ValueError:
+        return JSONResponse({"error_key": "invalid_date_gender"}, status_code=400)
+
+    current = basic_person_current_values(person)
+    if all(payload[key] == current[key] for key in payload):
+        return JSONResponse({"error_key": "no_changes_submitted"}, status_code=400)
+
+    change = ChangeRequest(
+        change_type=CHANGE_EDIT_PERSON,
+        status=CHANGE_PENDING,
+        target_person_id=person.id,
+        payload=payload,
+        requester_user_id=user.id,
+        requester_email=user.email,
+        requester_name=user.name,
+    )
+    db.add(change)
+    db.commit()
+    return {"message": "Your edit has been submitted and will be reflected after review."}
 
 @app.get("/profile", response_class=HTMLResponse)
 @app.get("/lineage", response_class=HTMLResponse)

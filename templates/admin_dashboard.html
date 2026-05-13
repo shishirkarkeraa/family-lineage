@@ -16,6 +16,83 @@
     </div>
 
     <div class="admin-panel">
+        <div class="admin-section-header">
+            <div>
+                <p class="admin-kicker">Review</p>
+                <h2>Pending changes</h2>
+            </div>
+            <span class="admin-count">{{ pending_changes | length }}</span>
+        </div>
+        <div class="admin-table-wrap">
+            <table class="admin-table admin-changes-table">
+                <thead>
+                    <tr>
+                        <th>Request</th>
+                        <th>Person</th>
+                        <th>Requester</th>
+                        <th>Submitted</th>
+                        <th>Current</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for change in pending_changes %}
+                    <tr>
+                        <td>
+                            <strong>{{ change.change_label }}</strong><br>
+                            <span class="admin-muted">{{ change.created_at.strftime("%Y-%m-%d %H:%M") if change.created_at else "" }}</span>
+                        </td>
+                        <td>
+                            {% if change.change_type == "ADD_DESCENDANT" %}
+                            Child of {{ change.parent or "Unknown" }}
+                            {% else %}
+                            {{ change.target or "Unknown" }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ change.requester }}<br>
+                            <span class="admin-muted">{{ change.requester_email or "" }}</span>
+                        </td>
+                        <td>
+                            <dl class="admin-change-list">
+                                {% for item in change.submitted %}
+                                <div><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div>
+                                {% endfor %}
+                            </dl>
+                        </td>
+                        <td>
+                            {% if change.current %}
+                            <dl class="admin-change-list">
+                                {% for item in change.current %}
+                                <div><dt>{{ item.label }}</dt><dd>{{ item.value }}</dd></div>
+                                {% endfor %}
+                            </dl>
+                            {% else %}
+                            <span class="admin-muted">New person</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="admin-review-actions">
+                                <form method="post" action="/admin/changes/{{ change.id }}/approve">
+                                    <button type="submit" class="admin-primary-button">Approve</button>
+                                </form>
+                                <form method="post" action="/admin/changes/{{ change.id }}/reject">
+                                    <button type="submit" class="admin-secondary-button">Reject</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="admin-empty">No pending changes.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="admin-panel">
         <div class="admin-table-wrap">
             <table class="admin-table">
                 <thead>

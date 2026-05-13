@@ -84,10 +84,28 @@
                 loading_profile: 'Building profile...',
                 loading_relationship: 'Finding relationship...',
                 open_menu: 'Open menu',
-                close_menu: 'Close menu'
+                close_menu: 'Close menu',
+                sign_out: 'Sign out',
+                tree_actions: 'Tree actions',
+                add_descendant: 'Add descendant',
+                edit_person: 'Edit person',
+                cancel: 'Cancel',
+                submit_for_review: 'Submit for review',
+                name_en_label: 'Name EN',
+                name_kn_label: 'Name KN',
+                dob_label: 'Date of birth',
+                adding_descendant_note: 'You are adding descendant for {parent}. Submit only if you are sure.',
+                edit_person_note: 'Changes will be submitted for admin review and will not update the tree immediately.',
+                review_submit_success: 'Your edit has been submitted and will be reflected after review.',
+                enter_one_name: 'Enter at least one name.',
+                invalid_date_gender: 'Use a valid date of birth and gender.',
+                no_changes_submitted: 'No changes were submitted.',
+                request_failed: 'Request failed. Please try again.',
+                choose_person_prompt: 'Select a person in the tree to request an update.',
+                pending_review: 'Pending review'
             },
             kn: {
-                site_title: ' ಕುಟುಂಬ',
+                site_title: 'ಕರ್ಕೇರ ಕುಟುಂಬ',
                 nav_home: 'ಮುಖಪುಟ',
                 nav_tree: 'ವಂಶವೃಕ್ಷ',
                 nav_profile: 'ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಪಡೆಯಿರಿ',
@@ -161,7 +179,25 @@
                 loading_profile: 'ಪ್ರೊಫೈಲ್ ಸಿದ್ಧವಾಗುತ್ತಿದೆ...',
                 loading_relationship: 'ಸಂಬಂಧ ಹುಡುಕಲಾಗುತ್ತಿದೆ...',
                 open_menu: 'ಮೆನು ತೆರೆಯಿರಿ',
-                close_menu: 'ಮೆನು ಮುಚ್ಚಿರಿ'
+                close_menu: 'ಮೆನು ಮುಚ್ಚಿರಿ',
+                sign_out: 'ಸೈನ್ ಔಟ್',
+                tree_actions: 'ವಂಶವೃಕ್ಷ ಕ್ರಿಯೆಗಳು',
+                add_descendant: 'ವಂಶಜರನ್ನು ಸೇರಿಸಿ',
+                edit_person: 'ವ್ಯಕ್ತಿಯನ್ನು ತಿದ್ದುಪಡಿ ಮಾಡಿ',
+                cancel: 'ರದ್ದುಮಾಡಿ',
+                submit_for_review: 'ಪರಿಶೀಲನೆಗೆ ಸಲ್ಲಿಸಿ',
+                name_en_label: 'ಇಂಗ್ಲಿಷ್ ಹೆಸರು',
+                name_kn_label: 'ಕನ್ನಡ ಹೆಸರು',
+                dob_label: 'ಜನ್ಮ ದಿನಾಂಕ',
+                adding_descendant_note: 'ನೀವು {parent} ಅವರ ವಂಶಜರನ್ನು ಸೇರಿಸುತ್ತಿದ್ದೀರಿ. ಖಚಿತವಾಗಿದ್ದರೆ ಮಾತ್ರ ಸಲ್ಲಿಸಿ.',
+                edit_person_note: 'ಬದಲಾವಣೆಗಳು ಆಡ್ಮಿನ್ ಪರಿಶೀಲನೆಗೆ ಸಲ್ಲಿಸಲಾಗುತ್ತದೆ ಮತ್ತು ತಕ್ಷಣ ವಂಶವೃಕ್ಷದಲ್ಲಿ ಕಾಣಿಸದು.',
+                review_submit_success: 'ನಿಮ್ಮ ತಿದ್ದುಪಡಿ ಸಲ್ಲಿಸಲಾಗಿದೆ ಮತ್ತು ಪರಿಶೀಲನೆಯ ನಂತರ ಪ್ರತಿಫಲಿಸುತ್ತದೆ.',
+                enter_one_name: 'ಕನಿಷ್ಠ ಒಂದು ಹೆಸರನ್ನು ನಮೂದಿಸಿ.',
+                invalid_date_gender: 'ಸರಿಯಾದ ಜನ್ಮ ದಿನಾಂಕ ಮತ್ತು ಲಿಂಗವನ್ನು ಬಳಸಿ.',
+                no_changes_submitted: 'ಯಾವುದೇ ಬದಲಾವಣೆ ಸಲ್ಲಿಸಲಾಗಿಲ್ಲ.',
+                request_failed: 'ವಿನಂತಿ ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
+                choose_person_prompt: 'ನವೀಕರಣವನ್ನು ವಿನಂತಿಸಲು ವಂಶವೃಕ್ಷದಲ್ಲಿ ಒಬ್ಬರನ್ನು ಆಯ್ಕೆಮಾಡಿ.',
+                pending_review: 'ಪರಿಶೀಲನೆ ಬಾಕಿ'
             }
         };
 
@@ -474,6 +510,9 @@
             <a href="/relationship" data-i18n="nav_relationship">ಸಂಬಂಧ ಹುಡುಕಿ</a>
         </div>
         <div class="nav-actions">
+            {% if request.session.get("public_user_id") %}
+            <a href="/auth/logout" class="nav-sign-out" data-i18n="sign_out">ಸೈನ್ ಔಟ್</a>
+            {% endif %}
             <button type="button" id="language-toggle" class="language-toggle" aria-label="ಇಂಗ್ಲಿಷ್‌ಗೆ ಬದಲಿಸಿ">ಕನ್ನಡ</button>
             <button type="button" id="menu-toggle" class="menu-toggle" aria-controls="site-menu" aria-expanded="false" aria-label="ಮೆನು ತೆರೆಯಿರಿ">
                 <span></span>

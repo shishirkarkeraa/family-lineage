@@ -90,6 +90,22 @@ nav .brand-icon {
   flex: 0 0 auto;
 }
 
+.nav-sign-out {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 700;
+  min-height: 42px;
+  padding: 0.65rem 0.8rem;
+  text-decoration: none;
+}
+
+.nav-sign-out:hover {
+  background: var(--surface-soft);
+  color: var(--text-primary);
+}
+
 .desktop-links {
   align-items: center;
   display: flex;
@@ -300,6 +316,34 @@ nav .brand-icon {
   padding: clamp(1rem, 3vw, 1.5rem);
 }
 
+.admin-section-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+}
+
+.admin-section-header h2 {
+  font-size: clamp(1.25rem, 3vw, 1.65rem);
+  margin: 0;
+}
+
+.admin-count {
+  align-items: center;
+  background: var(--surface-soft);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 38px;
+  min-width: 38px;
+  padding: 0 0.7rem;
+}
+
 .admin-login-panel {
   justify-self: center;
   max-width: 420px;
@@ -438,6 +482,52 @@ nav .brand-icon {
 .admin-empty {
   color: var(--text-secondary);
   text-align: center;
+}
+
+.admin-muted {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.admin-changes-table {
+  min-width: 1060px;
+}
+
+.admin-change-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.admin-change-list div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.admin-change-list dt {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.admin-change-list dd {
+  margin: 0;
+}
+
+.admin-review-actions {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.admin-review-actions form {
+  margin: 0;
+}
+
+.admin-review-actions .admin-primary-button,
+.admin-review-actions .admin-secondary-button {
+  min-height: 36px;
+  width: 100%;
 }
 
 .admin-modal-backdrop {
