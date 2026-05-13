@@ -16,10 +16,80 @@
     </div>
     
     <div id="result" class="lineage-container"></div>
+
+    <div class="profile-edit-backdrop" id="profile-edit-modal" aria-hidden="true">
+        <div class="profile-edit-modal" role="dialog" aria-modal="true" aria-labelledby="profile-edit-title">
+            <div class="profile-edit-header">
+                <div>
+                    <p class="admin-kicker" data-i18n="pending_review">ಪರಿಶೀಲನೆ ಬಾಕಿ</p>
+                    <h3 id="profile-edit-title" data-i18n="edit_person">ವ್ಯಕ್ತಿಯನ್ನು ತಿದ್ದುಪಡಿ ಮಾಡಿ</h3>
+                </div>
+                <button type="button" class="admin-icon-button" id="profile-edit-close" data-i18n-aria-label="close_menu" aria-label="ಮೆನು ಮುಚ್ಚಿರಿ">&times;</button>
+            </div>
+            <form class="admin-form admin-grid-form" id="profile-edit-form">
+                <input type="hidden" name="person_id">
+                <p class="text-secondary profile-edit-note" data-i18n="edit_person_note">ಬದಲಾವಣೆಗಳು ಆಡ್ಮಿನ್ ಪರಿಶೀಲನೆಗೆ ಸಲ್ಲಿಸಲಾಗುತ್ತದೆ ಮತ್ತು ತಕ್ಷಣ ವಂಶವೃಕ್ಷದಲ್ಲಿ ಕಾಣಿಸದು.</p>
+                <label>
+                    <span data-i18n="name_kn_label">ಕನ್ನಡ ಹೆಸರು</span>
+                    <input type="text" name="name_kn">
+                </label>
+                <label>
+                    <span data-i18n="name_en_label">ಇಂಗ್ಲಿಷ್ ಹೆಸರು</span>
+                    <input type="text" name="name_en">
+                </label>
+                <label>
+                    <span data-i18n="gender">ಲಿಂಗ</span>
+                    <select name="gender">
+                        <option value="" data-i18n="not_specified">ನಿರ್ದಿಷ್ಟಪಡಿಸಲಾಗಿಲ್ಲ</option>
+                        <option value="MALE" data-i18n="male">ಪುರುಷ</option>
+                        <option value="FEMALE" data-i18n="female">ಮಹಿಳೆ</option>
+                    </select>
+                </label>
+                <label>
+                    <span data-i18n="dob_label">ಜನ್ಮ ದಿನಾಂಕ</span>
+                    <input type="date" name="date_of_birth">
+                </label>
+                <div class="admin-form-footer profile-edit-footer">
+                    <button type="button" class="admin-secondary-button" id="profile-edit-cancel" data-i18n="cancel">ರದ್ದುಮಾಡಿ</button>
+                    <button type="submit" class="admin-primary-button" data-i18n="submit_for_review">ಪರಿಶೀಲನೆಗೆ ಸಲ್ಲಿಸಿ</button>
+                </div>
+                <p class="profile-edit-status" id="profile-edit-status"></p>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script>
     let currentLineage = null;
+    const profileEditModal = document.getElementById('profile-edit-modal');
+    const profileEditForm = document.getElementById('profile-edit-form');
+    const profileEditStatus = document.getElementById('profile-edit-status');
+
+    function setProfileEditStatus(message = '', isError = false) {
+        profileEditStatus.textContent = message;
+        profileEditStatus.classList.toggle('is-error', isError);
+    }
+
+    function setProfileEditModalOpen(isOpen) {
+        profileEditModal.classList.toggle('is-open', isOpen);
+        profileEditModal.setAttribute('aria-hidden', String(!isOpen));
+        document.body.classList.toggle('modal-open', isOpen);
+        if (!isOpen) {
+            setProfileEditStatus('');
+        }
+    }
+
+    function openProfileEditForm(person) {
+        if (!person) return;
+        profileEditForm.elements.person_id.value = person.id;
+        profileEditForm.elements.name_kn.value = person.name_kn || '';
+        profileEditForm.elements.name_en.value = person.name_en || '';
+        profileEditForm.elements.gender.value = person.gender || '';
+        profileEditForm.elements.date_of_birth.value = person.date_of_birth || '';
+        setProfileEditStatus('');
+        setProfileEditModalOpen(true);
+        window.setTimeout(() => profileEditForm.elements.name_kn.focus(), 60);
+    }
 
     async function fetchLineage() {
         const id = document.getElementById('person-select').value;
@@ -137,6 +207,13 @@
         const personName = document.createElement('h3');
         personName.textContent = nameForLanguage(profile.person);
         detailsPanel.appendChild(personName);
+
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'admin-secondary-button profile-edit-button';
+        editButton.textContent = t('edit_person');
+        editButton.addEventListener('click', () => openProfileEditForm(profile.person));
+        detailsPanel.appendChild(editButton);
 
         const nameDetails = getLanguage() === 'en'
             ? [
@@ -359,6 +436,42 @@
 
         return group;
     }
+
+    profileEditForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setProfileEditStatus('');
+        const submitButton = profileEditForm.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        try {
+            const response = await fetch('/api/changes/edit-person', {
+                method: 'POST',
+                body: new FormData(profileEditForm)
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                setProfileEditStatus(payload.error_key ? t(payload.error_key) : (payload.error || t('request_failed')), true);
+                return;
+            }
+            setProfileEditStatus(t('review_submit_success'));
+        } catch (error) {
+            setProfileEditStatus(t('request_failed'), true);
+        } finally {
+            submitButton.disabled = false;
+        }
+    });
+
+    document.getElementById('profile-edit-close').addEventListener('click', () => setProfileEditModalOpen(false));
+    document.getElementById('profile-edit-cancel').addEventListener('click', () => setProfileEditModalOpen(false));
+    profileEditModal.addEventListener('click', (event) => {
+        if (event.target === profileEditModal) {
+            setProfileEditModalOpen(false);
+        }
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && profileEditModal.classList.contains('is-open')) {
+            setProfileEditModalOpen(false);
+        }
+    });
 
     window.addEventListener('languagechange', renderLineage);
 </script>

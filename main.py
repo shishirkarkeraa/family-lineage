@@ -708,6 +708,7 @@ def person_payload(person, selected=False):
         "name_en": person.name_en,
         "name_kn": person.name_kn,
         "gender": person.gender,
+        "date_of_birth": person.date_of_birth.isoformat() if person.date_of_birth else None,
         "selected": selected,
     }
 

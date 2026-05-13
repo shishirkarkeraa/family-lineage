@@ -23,6 +23,11 @@
         position: relative;
     }
 
+    .tree-edit-note {
+        color: var(--text-secondary);
+        margin: 0 0 1rem;
+    }
+
     .tree-zoom-controls {
         position: absolute;
         top: 12px;
@@ -195,6 +200,7 @@
 {% block content %}
 <div class="card">
     <h2 data-i18n="complete_family">ಸಂಪೂರ್ಣ ಕರ್ಕೇರ ಕುಟುಂಬ</h2>
+    <p class="tree-edit-note" data-i18n="tree_edit_note">ವ್ಯಕ್ತಿಯನ್ನು ಸೇರಿಸಲು ಅಥವಾ ತಿದ್ದುಪಡಿ ಮಾಡಲು, ವಂಶವೃಕ್ಷದಲ್ಲಿರುವ ಆ ವ್ಯಕ್ತಿಯ ಮೇಲೆ ಕ್ಲಿಕ್ ಮಾಡಿ.</p>
     <div class="tree-viewer">
         <div class="tree-zoom-controls" aria-label="Tree zoom controls">
             <select class="tree-layout-select" id="tree-layout-direction" aria-label="Tree layout direction">
