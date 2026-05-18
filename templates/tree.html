@@ -51,6 +51,10 @@
         cursor: pointer;
     }
 
+    .tree-display-select {
+        max-width: 150px;
+    }
+
     .tree-zoom-button {
         width: 40px;
         height: 40px;
@@ -200,7 +204,7 @@
 {% block content %}
 <div class="card">
     <h2 data-i18n="complete_family">ಸಂಪೂರ್ಣ ಕರ್ಕೇರ ಕುಟುಂಬ</h2>
-    <p class="tree-edit-note" data-i18n="tree_edit_note">ವ್ಯಕ್ತಿಯನ್ನು ಸೇರಿಸಲು ಅಥವಾ ತಿದ್ದುಪಡಿ ಮಾಡಲು, ವಂಶವೃಕ್ಷದಲ್ಲಿರುವ ಆ ವ್ಯಕ್ತಿಯ ಮೇಲೆ ಕ್ಲಿಕ್ ಮಾಡಿ.</p>
+    <p class="tree-edit-note" id="tree-edit-note" data-i18n="tree_edit_note">ವ್ಯಕ್ತಿಯನ್ನು ಸೇರಿಸಲು ಅಥವಾ ತಿದ್ದುಪಡಿ ಮಾಡಲು, ವಂಶವೃಕ್ಷದಲ್ಲಿರುವ ಆ ವ್ಯಕ್ತಿಯ ಮೇಲೆ ಕ್ಲಿಕ್ ಮಾಡಿ.</p>
     <div class="tree-viewer">
         <div class="tree-zoom-controls" aria-label="Tree zoom controls">
             <select class="tree-layout-select" id="tree-layout-direction" aria-label="Tree layout direction">
@@ -208,6 +212,10 @@
                 <option value="LR">Left to right</option>
                 <option value="RL">Right to left</option>
                 <option value="DU">Bottom to top</option>
+            </select>
+            <select class="tree-layout-select tree-display-select" id="tree-display-mode" aria-label="Tree display mode">
+                <option value="full" data-i18n="tree_mode_full">Full tree</option>
+                <option value="expansive" data-i18n="tree_mode_expansive">Expansive</option>
             </select>
             <button type="button" class="tree-zoom-button" id="tree-zoom-out" aria-label="Zoom out">&minus;</button>
             <button type="button" class="tree-zoom-button" id="tree-zoom-in" aria-label="Zoom in">+</button>
@@ -290,16 +298,37 @@
     const nodesData = {{ nodes | tojson | safe }};
     const edgesData = {{ edges | tojson | safe }};
     let treeDirection = 'UD';
+    let treeDisplayMode = 'full';
+    const childrenByParent = new Map();
+    const nodeIdsWithParents = new Set();
+    const expandedNodeIds = new Set();
+
+    edgesData.forEach(edge => {
+        const children = childrenByParent.get(edge.from) || [];
+        children.push(edge.to);
+        childrenByParent.set(edge.from, children);
+        nodeIdsWithParents.add(edge.to);
+    });
+
+    const rootNodeIds = nodesData
+        .filter(node => !nodeIdsWithParents.has(node.id))
+        .map(node => node.id);
     
     function isCompactTree() {
         return window.matchMedia('(max-width: 720px)').matches;
     }
 
-    function buildVisNodes() {
+    function buildVisNodes(sourceNodes = nodesData) {
         const compact = isCompactTree();
-        return nodesData.map(node => ({
+        return sourceNodes.map(node => {
+            const children = childrenByParent.get(node.id) || [];
+            const canExpand = treeDisplayMode === 'expansive' && children.length > 0;
+            const isExpanded = expandedNodeIds.has(node.id);
+            const name = nameForLanguage(node);
+
+            return {
             id: node.id,
-            label: nameForLanguage(node),
+            label: canExpand ? `${name}\n${isExpanded ? '−' : '+'}` : name,
             level: node.level,
             shape: 'box',
             color: {
@@ -331,13 +360,14 @@
                 minimum: compact ? 128 : 180,
                 maximum: compact ? 180 : 260
             }
-        }));
+            };
+        });
     }
 
     const visNodes = new vis.DataSet(buildVisNodes());
 
-    const visEdges = new vis.DataSet(
-        edgesData.map(edge => ({
+    function buildVisEdges(sourceEdges = edgesData) {
+        return sourceEdges.map(edge => ({
             from: edge.from,
             to: edge.to,
             arrows: 'to',
@@ -351,8 +381,10 @@
                 type: 'discrete',
                 roundness: 0
             }
-        }))
-    );
+        }));
+    }
+
+    const visEdges = new vis.DataSet(buildVisEdges());
 
     const container = document.getElementById('mynetwork');
     const data = {
@@ -409,9 +441,71 @@
     const actionStatus = document.getElementById('tree-action-status');
     const addForm = document.getElementById('tree-add-form');
     const editForm = document.getElementById('tree-edit-form');
+    const treeEditNote = document.getElementById('tree-edit-note');
 
     function nodeById(id) {
         return nodesData.find(node => node.id === id);
+    }
+
+    function visibleNodeIds() {
+        if (treeDisplayMode !== 'expansive') {
+            return new Set(nodesData.map(node => node.id));
+        }
+
+        const visible = new Set(rootNodeIds);
+        const visitExpandedChildren = parentId => {
+            if (!expandedNodeIds.has(parentId)) return;
+            (childrenByParent.get(parentId) || []).forEach(childId => {
+                if (visible.has(childId)) return;
+                visible.add(childId);
+                visitExpandedChildren(childId);
+            });
+        };
+
+        rootNodeIds.forEach(visitExpandedChildren);
+        return visible;
+    }
+
+    function renderTreeModeText() {
+        const key = treeDisplayMode === 'expansive' ? 'tree_expansive_note' : 'tree_edit_note';
+        treeEditNote.textContent = t(key);
+    }
+
+    function renderVisibleTree(shouldFit = false) {
+        const visibleIds = visibleNodeIds();
+        const visibleNodes = nodesData.filter(node => visibleIds.has(node.id));
+        const visibleEdges = edgesData.filter(edge => visibleIds.has(edge.from) && visibleIds.has(edge.to));
+
+        visNodes.clear();
+        visNodes.add(buildVisNodes(visibleNodes));
+        visEdges.clear();
+        visEdges.add(buildVisEdges(visibleEdges));
+        renderTreeModeText();
+
+        if (shouldFit) {
+            requestAnimationFrame(() => network.fit({
+                animation: {
+                    duration: 240,
+                    easingFunction: 'easeInOutQuad'
+                }
+            }));
+        }
+    }
+
+    function collapseDescendantExpansions(nodeId) {
+        expandedNodeIds.delete(nodeId);
+        (childrenByParent.get(nodeId) || []).forEach(collapseDescendantExpansions);
+    }
+
+    function toggleExpansion(nodeId) {
+        if (treeDisplayMode !== 'expansive' || !(childrenByParent.get(nodeId) || []).length) return;
+
+        if (expandedNodeIds.has(nodeId)) {
+            collapseDescendantExpansions(nodeId);
+        } else {
+            expandedNodeIds.add(nodeId);
+        }
+        renderVisibleTree(true);
     }
 
     function setActionStatus(message = '', isError = false) {
@@ -523,7 +617,9 @@
     network.on('click', params => {
         if (!params.nodes.length) return;
         const node = nodeById(params.nodes[0]);
-        if (node) openTreeActionPanel(node);
+        if (!node) return;
+        toggleExpansion(node.id);
+        openTreeActionPanel(node);
     });
 
     document.getElementById('tree-action-close').addEventListener('click', () => {
@@ -560,6 +656,11 @@
                 easingFunction: 'easeInOutQuad'
             }
         });
+    });
+    document.getElementById('tree-display-mode').addEventListener('change', event => {
+        treeDisplayMode = event.target.value;
+        expandedNodeIds.clear();
+        renderVisibleTree(true);
     });
 
     container.addEventListener('wheel', event => {
@@ -599,13 +700,13 @@
     });
 
     window.addEventListener('languagechange', () => {
-        visNodes.update(buildVisNodes());
+        renderVisibleTree();
         renderTreeActionText();
         network.fit();
     });
 
     window.addEventListener('resize', () => {
-        visNodes.update(buildVisNodes());
+        renderVisibleTree();
         network.setOptions(treeOptions());
         network.fit();
     });
