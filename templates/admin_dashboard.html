@@ -18,6 +18,78 @@
     <div class="admin-panel">
         <div class="admin-section-header">
             <div>
+                <p class="admin-kicker">Google access</p>
+                <h2>Google accounts</h2>
+            </div>
+            <span class="admin-count">{{ google_users | length }}</span>
+        </div>
+        <div class="admin-table-wrap">
+            <table class="admin-table admin-users-table">
+                <thead>
+                    <tr>
+                        <th>Account</th>
+                        <th>Status</th>
+                        <th>First login</th>
+                        <th>Last login</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in google_users %}
+                    <tr>
+                        <td>
+                            <div class="admin-google-user">
+                                {% if user.picture %}
+                                <img src="{{ user.picture }}" alt="" class="admin-google-avatar">
+                                {% else %}
+                                <span class="admin-google-avatar admin-google-avatar-fallback">{{ (user.name or user.email or "?")[:1] }}</span>
+                                {% endif %}
+                                <div>
+                                    <strong>{{ user.name or "Unnamed account" }}</strong><br>
+                                    <span class="admin-muted">{{ user.email }}</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if user.is_blocked %}
+                            <span class="admin-status admin-status-blocked">Blocked</span>
+                            {% if user.blocked_at %}
+                            <br><span class="admin-muted">{{ user.blocked_at.strftime("%Y-%m-%d %H:%M") }}</span>
+                            {% endif %}
+                            {% if user.blocked_reason %}
+                            <br><span class="admin-muted">{{ user.blocked_reason }}</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="admin-status admin-status-active">Allowed</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.created_at.strftime("%Y-%m-%d %H:%M") if user.created_at else "-" }}</td>
+                        <td>{{ user.last_login_at.strftime("%Y-%m-%d %H:%M") if user.last_login_at else "-" }}</td>
+                        <td>
+                            {% if user.is_blocked %}
+                            <form method="post" action="/admin/google-users/{{ user.id }}/unblock" class="admin-inline-form">
+                                <button type="submit" class="admin-secondary-button">Unblock</button>
+                            </form>
+                            {% else %}
+                            <form method="post" action="/admin/google-users/{{ user.id }}/block" class="admin-inline-form">
+                                <button type="submit" class="admin-secondary-button admin-danger-button">Block</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="admin-empty">No Google users have logged in yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="admin-panel">
+        <div class="admin-section-header">
+            <div>
                 <p class="admin-kicker">Review</p>
                 <h2>Pending changes</h2>
             </div>

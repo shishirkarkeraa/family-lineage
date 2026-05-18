@@ -530,6 +530,65 @@ nav .brand-icon {
   width: 100%;
 }
 
+.admin-users-table {
+  min-width: 900px;
+}
+
+.admin-google-user {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.admin-google-avatar {
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  height: 40px;
+  object-fit: cover;
+  width: 40px;
+}
+
+.admin-google-avatar-fallback {
+  align-items: center;
+  background: var(--surface-soft);
+  color: var(--text-primary);
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+  text-transform: uppercase;
+}
+
+.admin-status {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.35rem 0.6rem;
+}
+
+.admin-status-active {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+
+.admin-status-blocked {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fecaca;
+}
+
+.admin-inline-form {
+  margin: 0;
+}
+
+.admin-danger-button {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fecaca;
+}
+
+.blocked-panel {
+  margin: 0 auto;
+}
+
 .admin-modal-backdrop {
   align-items: center;
   background: rgba(0, 0, 0, 0.72);

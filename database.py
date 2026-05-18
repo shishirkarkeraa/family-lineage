@@ -2,7 +2,7 @@ import unicodedata
 import os
 from datetime import datetime
 
-from sqlalchemy import create_engine, Column, Date, DateTime, Enum, ForeignKey, Integer, JSON, String, Text, inspect, text
+from sqlalchemy import Boolean, create_engine, Column, Date, DateTime, Enum, ForeignKey, Integer, JSON, String, Text, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 try:
@@ -99,6 +99,9 @@ class User(Base):
     picture = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_login_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    is_blocked = Column(Boolean, default=False, nullable=False)
+    blocked_at = Column(DateTime, nullable=True)
+    blocked_reason = Column(Text, nullable=True)
 
 class ChangeRequest(Base):
     __tablename__ = "changes"
@@ -122,6 +125,7 @@ class ChangeRequest(Base):
     parent_person = relationship("Person", foreign_keys=[parent_person_id])
 
 _base_tables_ready = False
+_user_block_columns_ready = False
 
 def ensure_base_tables():
     global _base_tables_ready
@@ -140,8 +144,31 @@ def ensure_base_tables():
 
     _base_tables_ready = True
 
+def ensure_user_block_columns():
+    global _user_block_columns_ready
+    if _user_block_columns_ready:
+        return
+
+    inspector = inspect(engine)
+    if not inspector.has_table("users"):
+        ensure_base_tables()
+        _user_block_columns_ready = True
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    with engine.begin() as connection:
+        if "is_blocked" not in columns:
+            connection.execute(text("ALTER TABLE users ADD COLUMN is_blocked BOOLEAN NOT NULL DEFAULT FALSE"))
+        if "blocked_at" not in columns:
+            connection.execute(text("ALTER TABLE users ADD COLUMN blocked_at TIMESTAMP"))
+        if "blocked_reason" not in columns:
+            connection.execute(text("ALTER TABLE users ADD COLUMN blocked_reason TEXT"))
+
+    _user_block_columns_ready = True
+
 def init_db():
     ensure_base_tables()
+    ensure_user_block_columns()
 
 def to_english(kannada_text):
     if not kannada_text:
@@ -238,6 +265,7 @@ def migrate_person_name_columns():
 
 def get_db():
     ensure_base_tables()
+    ensure_user_block_columns()
     db = SessionLocal()
     try:
         yield db

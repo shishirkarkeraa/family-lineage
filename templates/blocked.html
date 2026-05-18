@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="admin-login-panel admin-panel blocked-panel">
+    <p class="admin-kicker">Access blocked</p>
+    <h1>This account cannot view the site</h1>
+    <p class="text-secondary">
+        {{ user.email }} has been blocked by an administrator and cannot access family pages.
+    </p>
+    <a href="/auth/logout" class="admin-secondary-button">Sign out</a>
+</section>
+{% endblock %}

@@ -26,6 +26,8 @@ from database import (
     ChangeRequest,
     Person,
     User,
+    SessionLocal,
+    ensure_user_block_columns,
     get_db,
     migrate_person_name_columns,
     normalize_gender,
@@ -46,8 +48,25 @@ PUBLIC_EXEMPT_PATHS = {"/favicon.ico", "/favicon.png", "/robots.txt"}
 async def require_public_google_login(request: Request, call_next):
     path = request.url.path
     is_exempt = path in PUBLIC_EXEMPT_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_EXEMPT_PREFIXES)
-    if is_exempt or request.session.get("public_user_id"):
+    if is_exempt:
         return await call_next(request)
+
+    user_id = request.session.get("public_user_id")
+    if user_id:
+        ensure_user_block_columns()
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                request.session.pop("public_user_id", None)
+            elif user.is_blocked:
+                if path.startswith("/api"):
+                    return JSONResponse({"error": "Your account is blocked from viewing this site."}, status_code=403)
+                return templates.TemplateResponse("blocked.html", {"request": request, "user": user}, status_code=403)
+            else:
+                return await call_next(request)
+        finally:
+            db.close()
 
     if path.startswith("/api"):
         return JSONResponse({"error": "Google login is required."}, status_code=401)
@@ -93,6 +112,8 @@ def public_user_required(request: Request, db: Session):
     if not user:
         request.session.pop("public_user_id", None)
         raise HTTPException(status_code=401, detail="Google login is required")
+    if user.is_blocked:
+        raise HTTPException(status_code=403, detail="Your account is blocked from viewing this site")
     return user
 
 def app_base_url(request: Request):
@@ -242,6 +263,23 @@ def pending_change_rows(db):
         for change in changes
     ]
 
+def admin_google_users(db):
+    users = db.query(User).order_by(User.last_login_at.desc(), User.email.asc()).all()
+    return [
+        {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "picture": user.picture,
+            "created_at": user.created_at,
+            "last_login_at": user.last_login_at,
+            "is_blocked": user.is_blocked,
+            "blocked_at": user.blocked_at,
+            "blocked_reason": user.blocked_reason,
+        }
+        for user in users
+    ]
+
 def admin_people(db):
     people = db.query(Person).order_by(Person.name_en, Person.name_kn, Person.id).all()
     people_by_id = {person.id: person for person in people}
@@ -372,8 +410,46 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
             "people": admin_people(db),
             "parents": admin_parent_options(db),
             "pending_changes": pending_change_rows(db),
+            "google_users": admin_google_users(db),
         },
     )
+
+@app.post("/admin/google-users/{user_id}/block")
+async def admin_block_google_user(
+    request: Request,
+    user_id: int,
+    blocked_reason: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    redirect = admin_required(request)
+    if redirect:
+        return redirect
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Google user not found")
+
+    user.is_blocked = True
+    user.blocked_at = datetime.utcnow()
+    user.blocked_reason = blocked_reason.strip() or None
+    db.commit()
+    return RedirectResponse("/admin", status_code=303)
+
+@app.post("/admin/google-users/{user_id}/unblock")
+async def admin_unblock_google_user(request: Request, user_id: int, db: Session = Depends(get_db)):
+    redirect = admin_required(request)
+    if redirect:
+        return redirect
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Google user not found")
+
+    user.is_blocked = False
+    user.blocked_at = None
+    user.blocked_reason = None
+    db.commit()
+    return RedirectResponse("/admin", status_code=303)
 
 @app.get("/admin/users/new", response_class=HTMLResponse)
 async def admin_new_user(request: Request, db: Session = Depends(get_db)):
