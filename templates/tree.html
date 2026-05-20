@@ -217,11 +217,12 @@
                 <option value="full" data-i18n="tree_mode_full">Full tree</option>
                 <option value="expansive" data-i18n="tree_mode_expansive">Expansive</option>
             </select>
+            <button type="button" class="tree-zoom-button" id="tree-edit-selected" data-i18n-aria-label="edit_selected_person" aria-label="Edit selected person" title="Edit selected person" hidden>✎</button>
             <button type="button" class="tree-zoom-button" id="tree-zoom-out" aria-label="Zoom out">&minus;</button>
             <button type="button" class="tree-zoom-button" id="tree-zoom-in" aria-label="Zoom in">+</button>
         </div>
         <div id="mynetwork"></div>
-        <aside class="tree-action-panel" id="tree-action-panel" aria-live="polite">
+        <aside class="tree-action-panel" id="tree-action-panel" aria-live="polite" aria-labelledby="tree-action-person" role="dialog">
             <div class="tree-action-header">
                 <div>
                     <p class="tree-action-kicker" data-i18n="tree_actions">ವಂಶವೃಕ್ಷ ಕ್ರಿಯೆಗಳು</p>
@@ -442,6 +443,7 @@
     const addForm = document.getElementById('tree-add-form');
     const editForm = document.getElementById('tree-edit-form');
     const treeEditNote = document.getElementById('tree-edit-note');
+    const treeEditSelected = document.getElementById('tree-edit-selected');
 
     function nodeById(id) {
         return nodesData.find(node => node.id === id);
@@ -471,7 +473,7 @@
         treeEditNote.textContent = t(key);
     }
 
-    function renderVisibleTree(shouldFit = false) {
+    function renderVisibleTree() {
         const visibleIds = visibleNodeIds();
         const visibleNodes = nodesData.filter(node => visibleIds.has(node.id));
         const visibleEdges = edgesData.filter(edge => visibleIds.has(edge.from) && visibleIds.has(edge.to));
@@ -481,15 +483,6 @@
         visEdges.clear();
         visEdges.add(buildVisEdges(visibleEdges));
         renderTreeModeText();
-
-        if (shouldFit) {
-            requestAnimationFrame(() => network.fit({
-                animation: {
-                    duration: 240,
-                    easingFunction: 'easeInOutQuad'
-                }
-            }));
-        }
     }
 
     function collapseDescendantExpansions(nodeId) {
@@ -505,7 +498,7 @@
         } else {
             expandedNodeIds.add(nodeId);
         }
-        renderVisibleTree(true);
+        renderVisibleTree();
     }
 
     function setActionStatus(message = '', isError = false) {
@@ -526,13 +519,17 @@
         document.getElementById('tree-add-note').textContent = t('adding_descendant_note', { parent: selectedName });
     }
 
-    function openTreeActionPanel(node) {
+    function selectTreeNode(node) {
         selectedTreeNode = node;
+        treeEditSelected.hidden = false;
+    }
+
+    function openEditPopup() {
+        if (!selectedTreeNode) return;
         actionPanel.classList.add('is-open');
-        actionButtons.hidden = false;
-        closeTreeForms();
         setActionStatus('');
         renderTreeActionText();
+        showEditForm();
     }
 
     function showAddForm() {
@@ -619,15 +616,15 @@
         const node = nodeById(params.nodes[0]);
         if (!node) return;
         toggleExpansion(node.id);
-        openTreeActionPanel(node);
+        selectTreeNode(node);
     });
 
     document.getElementById('tree-action-close').addEventListener('click', () => {
         actionPanel.classList.remove('is-open');
-        selectedTreeNode = null;
         closeTreeForms();
         setActionStatus('');
     });
+    treeEditSelected.addEventListener('click', openEditPopup);
     document.getElementById('tree-add-descendant').addEventListener('click', showAddForm);
     document.getElementById('tree-edit-person').addEventListener('click', showEditForm);
     document.querySelectorAll('.tree-form-cancel').forEach(button => {
@@ -660,7 +657,7 @@
     document.getElementById('tree-display-mode').addEventListener('change', event => {
         treeDisplayMode = event.target.value;
         expandedNodeIds.clear();
-        renderVisibleTree(true);
+        renderVisibleTree();
     });
 
     container.addEventListener('wheel', event => {
@@ -702,13 +699,11 @@
     window.addEventListener('languagechange', () => {
         renderVisibleTree();
         renderTreeActionText();
-        network.fit();
     });
 
     window.addEventListener('resize', () => {
         renderVisibleTree();
         network.setOptions(treeOptions());
-        network.fit();
     });
 </script>
 {% endblock %}
