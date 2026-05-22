@@ -209,13 +209,13 @@
         <div class="tree-zoom-controls" aria-label="Tree zoom controls">
             <select class="tree-layout-select" id="tree-layout-direction" aria-label="Tree layout direction">
                 <option value="UD">Top to bottom</option>
-                <option value="LR">Left to right</option>
+                <option value="LR" selected>Left to right</option>
                 <option value="RL">Right to left</option>
                 <option value="DU">Bottom to top</option>
             </select>
             <select class="tree-layout-select tree-display-select" id="tree-display-mode" aria-label="Tree display mode">
                 <option value="full" data-i18n="tree_mode_full">Full tree</option>
-                <option value="expansive" data-i18n="tree_mode_expansive">Expansive</option>
+                <option value="expansive" data-i18n="tree_mode_expansive" selected>Expansive</option>
             </select>
             <button type="button" class="tree-zoom-button" id="tree-edit-selected" data-i18n-aria-label="edit_selected_person" aria-label="Edit selected person" title="Edit selected person" hidden>✎</button>
             <button type="button" class="tree-zoom-button" id="tree-zoom-out" aria-label="Zoom out">&minus;</button>
@@ -298,8 +298,8 @@
 <script type="text/javascript">
     const nodesData = {{ nodes | tojson | safe }};
     const edgesData = {{ edges | tojson | safe }};
-    let treeDirection = 'UD';
-    let treeDisplayMode = 'full';
+    let treeDirection = 'LR';
+    let treeDisplayMode = 'expansive';
     const childrenByParent = new Map();
     const nodeIdsWithParents = new Set();
     const expandedNodeIds = new Set();
@@ -365,7 +365,9 @@
         });
     }
 
-    const visNodes = new vis.DataSet(buildVisNodes());
+    const visNodes = new vis.DataSet(
+        buildVisNodes(nodesData.filter(node => rootNodeIds.includes(node.id)))
+    );
 
     function buildVisEdges(sourceEdges = edgesData) {
         return sourceEdges.map(edge => ({
@@ -385,7 +387,7 @@
         }));
     }
 
-    const visEdges = new vis.DataSet(buildVisEdges());
+    const visEdges = new vis.DataSet(buildVisEdges([]));
 
     const container = document.getElementById('mynetwork');
     const data = {
