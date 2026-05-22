@@ -23,15 +23,6 @@
         position: relative;
     }
 
-    .tree-selection-ring {
-        border: 3px solid var(--accent-color);
-        border-radius: 50%;
-        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2), 0 0 22px rgba(34, 197, 94, 0.7);
-        pointer-events: none;
-        position: absolute;
-        z-index: 1;
-    }
-
     .tree-edit-note {
         color: var(--text-secondary);
         margin: 0 0 1rem;
@@ -231,7 +222,6 @@
             <button type="button" class="tree-zoom-button" id="tree-zoom-in" aria-label="Zoom in">+</button>
         </div>
         <div id="mynetwork"></div>
-        <div class="tree-selection-ring" id="tree-selection-ring" aria-hidden="true" hidden></div>
         <aside class="tree-action-panel" id="tree-action-panel" aria-live="polite" aria-labelledby="tree-action-person" role="dialog">
             <div class="tree-action-header">
                 <div>
@@ -310,6 +300,7 @@
     const edgesData = {{ edges | tojson | safe }};
     let treeDirection = 'LR';
     let treeDisplayMode = 'expansive';
+    let selectedTreeNode = null;
     const childrenByParent = new Map();
     const nodeIdsWithParents = new Set();
     const expandedNodeIds = new Set();
@@ -335,6 +326,7 @@
             const children = childrenByParent.get(node.id) || [];
             const canExpand = treeDisplayMode === 'expansive' && children.length > 0;
             const isExpanded = expandedNodeIds.has(node.id);
+            const isSelected = selectedTreeNode?.id === node.id;
             const name = nameForLanguage(node);
 
             return {
@@ -344,14 +336,14 @@
             shape: 'box',
             color: {
                 background: '#111111',
-                border: '#f8fafc',
+                border: isSelected ? '#22c55e' : '#f8fafc',
                 highlight: {
                     background: '#181818',
-                    border: '#ffffff'
+                    border: isSelected ? '#22c55e' : '#ffffff'
                 },
                 hover: {
                     background: '#181818',
-                    border: '#ffffff'
+                    border: isSelected ? '#22c55e' : '#ffffff'
                 }
             },
             font: {
@@ -359,8 +351,8 @@
                 face: 'Inter',
                 size: compact ? 13 : 16
             },
-            borderWidth: 2,
-            borderWidthSelected: 2,
+            borderWidth: isSelected ? 4 : 2,
+            borderWidthSelected: isSelected ? 4 : 2,
             margin: {
                 top: compact ? 12 : 18,
                 right: compact ? 16 : 28,
@@ -447,7 +439,6 @@
     const minTreeScale = 0.18;
     const maxTreeScale = 2.4;
     let lastPinchDistance = null;
-    let selectedTreeNode = null;
     const actionPanel = document.getElementById('tree-action-panel');
     const actionPerson = document.getElementById('tree-action-person');
     const actionButtons = document.getElementById('tree-action-buttons');
@@ -456,7 +447,6 @@
     const editForm = document.getElementById('tree-edit-form');
     const treeEditNote = document.getElementById('tree-edit-note');
     const treeEditSelected = document.getElementById('tree-edit-selected');
-    const treeSelectionRing = document.getElementById('tree-selection-ring');
 
     function nodeById(id) {
         return nodesData.find(node => node.id === id);
@@ -496,27 +486,6 @@
         visEdges.clear();
         visEdges.add(buildVisEdges(visibleEdges));
         renderTreeModeText();
-        updateSelectedNodeRing();
-    }
-
-    function updateSelectedNodeRing() {
-        if (!selectedTreeNode || !visNodes.get(selectedTreeNode.id)) {
-            treeSelectionRing.hidden = true;
-            return;
-        }
-
-        const bounds = network.getBoundingBox(selectedTreeNode.id);
-        const topLeft = network.canvasToDOM({ x: bounds.left, y: bounds.top });
-        const bottomRight = network.canvasToDOM({ x: bounds.right, y: bounds.bottom });
-        const width = bottomRight.x - topLeft.x;
-        const height = bottomRight.y - topLeft.y;
-        const size = Math.max(width, height) + 24;
-
-        treeSelectionRing.style.width = `${size}px`;
-        treeSelectionRing.style.height = `${size}px`;
-        treeSelectionRing.style.left = `${topLeft.x + (width - size) / 2}px`;
-        treeSelectionRing.style.top = `${topLeft.y + (height - size) / 2}px`;
-        treeSelectionRing.hidden = false;
     }
 
     function collapseDescendantExpansions(nodeId) {
@@ -554,9 +523,15 @@
     }
 
     function selectTreeNode(node) {
+        const previouslySelected = selectedTreeNode;
         selectedTreeNode = node;
         treeEditSelected.hidden = false;
-        requestAnimationFrame(updateSelectedNodeRing);
+        if (previouslySelected && visNodes.get(previouslySelected.id)) {
+            visNodes.update(buildVisNodes([previouslySelected]));
+        }
+        if (visNodes.get(node.id)) {
+            visNodes.update(buildVisNodes([node]));
+        }
     }
 
     function openEditPopup() {
@@ -653,8 +628,6 @@
         toggleExpansion(node.id);
         selectTreeNode(node);
     });
-
-    network.on('afterDrawing', updateSelectedNodeRing);
 
     document.getElementById('tree-action-close').addEventListener('click', () => {
         actionPanel.classList.remove('is-open');
